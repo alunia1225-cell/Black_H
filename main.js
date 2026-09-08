@@ -62,31 +62,20 @@ atlas.onload=()=>{
 };
 atlas.onerror=()=>{console.error("city_atlas.png could not be loaded");};
 
-// Atlas is 512 x 896. Coordinates below use the image's top-left origin and
-// are converted to WebGL UVs so added tiles do not distort the old materials.
-const ATW=512,ATH=896;
-function tile(x,y,w=128,h=128){
-  return [x/ATW,1-(y+h)/ATH,(x+w)/ATW,1-y/ATH];
-}
-const A={
- concrete:tile(0,0),brick:tile(128,0),glass:tile(256,0),window:tile(384,0),
- asphalt:tile(0,128),sidewalk:tile(128,128),roof:tile(256,128),dark:tile(384,128),
- metal:tile(0,256),grass:tile(128,256),sign_red:tile(256,256),sign_blue:tile(384,256),
- lane:tile(0,384),light:tile(128,384),wood:tile(256,384),leaf:tile(384,384)
-};
-for(let i=0;i<48;i++){
-  const col=i%8,row=Math.floor(i/8);
-  A['real'+i]=tile(col*64,512+row*64,64,64);
-}
+// ATLAS: 1024x1024, 16x16 cells, 100 authored procedural materials.
+const ATW=1024, ATH=1024, TILE=64;
+function tileId(id){const col=id%16,row=Math.floor(id/16);return [col*TILE/ATW,1-(row*TILE+TILE)/ATH,(col*TILE+TILE)/ATW,1-row*TILE/ATH];}
+const A={}; for(let i=0;i<100;i++) A['t'+i]=tileId(i);
 const REAL={
- brick_red:'real0',brick_dark:'real1',plaster_cream:'real2',plaster_old:'real3',concrete_light:'real4',concrete_stain:'real5',
- metal_panel:'real6',metal_rust:'real7',tile_blue:'real8',tile_green:'real9',stone:'real10',wood_dark:'real11',shutter:'real12',
- shop_glass:'real13',office_glass:'real14',dirty_glass:'real15',sign_white:'real16',sign_red2:'real17',sign_yellow:'real18',sign_blue2:'real19',
- roof_tar:'real20',roof_metal:'real21',ac_unit:'real22',rollup:'real23',door_metal:'real24',door_wood:'real25',awning:'real26',
- asphalt_patch:'real27',sidewalk_crack:'real28',wall_graffiti:'real29',wall_moss:'real30',wall_water:'real31',window_lit:'real32',
- window_dark:'real33',window_reflect:'real34',curb:'real35',paint_worn:'real36',paint_blue:'real37',paint_green:'real38',paint_brown:'real39',
- warehouse_panel:'real40',warehouse_door:'real41',utility_wood:'real42',utility_metal:'real43',neon_base:'real44',canopy:'real45',parking_mark:'real46',bollard:'real47'};
-
+ concrete_light:'t10',concrete_stain:'t11',plaster_cream:'t20',plaster_old:'t21',brick_red:'t0',brick_dark:'t1',
+ tile_blue:'t60',tile_green:'t61',stone:'t14',metal_panel:'t40',paint_worn:'t28',paint_blue:'t25',paint_green:'t27',paint_brown:'t23',
+ window:'t30',window_reflect:'t31',window_dark:'t34',window_lit:'t94',glass:'t33',shop_glass:'t32',office_glass:'t37',dirty_glass:'t38',
+ roof:'t68',roof_tar:'t67',roof_metal:'t69',dark:'t79',asphalt:'t70',asphalt_patch:'t78',sidewalk:'t13',curb:'t12',lane:'t89',
+ metal:'t43',wood:'t53',leaf:'t72',sign_red:'t81',sign_blue:'t82',sign_white:'t85',sign_yellow:'t83',light:'t95',
+ awning:'t62',canopy:'t64',ac_unit:'t45',rollup:'t46',door_metal:'t47',door_wood:'t58',warehouse_panel:'t48',warehouse_door:'t49',
+ utility_wood:'t52',utility_metal:'t43',neon_base:'t90',parking_mark:'t86',bollard:'t91',wall_graffiti:'t88',wall_moss:'t18',wall_water:'t19',
+ shutter:'t41',roof_tile:'t60',roof_rust:'t42',stone_dark:'t9',concrete_dark:'t16',plaster_grey:'t22',plaster_blue:'t24',plaster_beige:'t29'
+};
 const P=[],C=[],COL=[];
 const colliders=[];
 const rand=(seed)=>{let t=seed>>>0;return()=>{t+=0x6D2B79F5;let x=t;x=Math.imul(x^x>>>15,x|1);x^=x+Math.imul(x^x>>>7,x|61);return((x^x>>>14)>>>0)/4294967296}};
@@ -217,29 +206,29 @@ function building(x,z,w,d,h,style){
   if(style%5===0)addBox(x-.8,h+.48,z,.5,.42,.5,"metal");
 }
 
-// Populate every block with irregular footprints. Some blocks are low-rise
-// commercial, others contain a taller anchor building.
+// Populate every block with irregular footprints. Buildings stay inside the block
+// interior so no collider can overlap the surrounding street lanes.
+const INNER=(BLOCK-ROAD)/2-1.25;
 for(let bx=-HALF;bx<HALF;bx++)for(let bz=-HALF;bz<HALF;bz++){
-  const x0=roads[bx+HALF],x1=roads[bx+HALF+1];
-  const z0=roads[bz+HALF],z1=roads[bz+HALF+1];
+  const x0=roads[bx+HALF],x1=roads[bx+HALF+1],z0=roads[bz+HALF],z1=roads[bz+HALF+1];
   const cx=(x0+x1)/2,cz=(z0+z1)/2;
   const local=rand((bx+12)*9283+(bz+17)*17389+seed);
   const central=Math.abs(cx)<80&&Math.abs(cz)<80;
   const commercial=(Math.abs(cx)<45||Math.abs(cz)<45);
-  const count=central?3:2;
+  const count=central?2:1;
   for(let n=0;n<count;n++){
-    const w=9+local()*9,d=9+local()*9;
-    const px=cx+(local()-.5)*14, pz=cz+(local()-.5)*14;
-    const h=(central?13:9)+local()*(commercial?18:12);
+    const w=7+local()*8,d=7+local()*8,h=(central?10:7)+local()*(commercial?16:10);
+    const maxC=INNER-Math.max(w,d)/2;
+    const px=cx+(local()*2-1)*Math.max(1,maxC-1.0), pz=cz+(local()*2-1)*Math.max(1,maxC-1.0);
     building(px,pz,w,d,h,Math.floor(local()*20));
   }
-  // Low-rise shop row on major-road facing blocks.
+  // Ground-floor storefront strip, also kept clear of traffic lanes.
   if(commercial){
-    const face=local()>.5;
-    const yy=face?z0+4.4:z1-4.4;
+    const side=local()>.5 ? 1 : -1;
+    const yy=cz+side*(ROAD/2+3.25);
     for(let n=-1;n<=1;n++){
-      const px=cx+n*8.5;
-      building(px,yy,7.2,5.0,5.5+local()*3.5,Math.floor(local()*20));
+      const px=cx+n*7.0;
+      building(px,yy,5.8,4.6,5.0+local()*3.0,Math.floor(local()*20));
     }
   }
 }
@@ -339,59 +328,54 @@ gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,stride*4
 // One canonical player state drives BOTH movement and camera. There are no
 // secondary camera/player variables, so mobile and desktop input end up in the
 // exact same update path.
-const player={x:0,y:1.72,z:2.0,yaw:0,pitch:0};
+const player={x:0,y:1.72,z:0,yaw:0,pitch:0};
 const keys=Object.create(null);
 const stick={active:false,id:null,x:0,y:0};
 const look={active:false,id:null,x:0,y:0};
-let running=false, started=false;
-
-addEventListener('keydown',e=>{keys[e.code]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();});
-addEventListener('keyup',e=>{keys[e.code]=false;});
-
-const stickEl=document.getElementById('stick');
-const knob=document.getElementById('knob');
-const runBtn=document.getElementById('runBtn');
+let running=false,started=false;
+const stickEl=document.getElementById('stick'),knob=document.getElementById('knob'),runBtn=document.getElementById('runBtn');
 const lookSurface=document.getElementById('lookSurface');
-
-function setKnob(dx,dy){knob.style.transform=`translate(${dx}px,${dy}px)`;}
-function stickSet(clientX,clientY){
- const r=stickEl.getBoundingClientRect();
- const cx=r.left+r.width*.5, cy=r.top+r.height*.5;
- let dx=clientX-cx,dy=clientY-cy;
- const max=Math.max(24,r.width*.31),m=Math.hypot(dx,dy)||1;
- if(m>max){const q=max/m;dx*=q;dy*=q;}
- setKnob(dx,dy);
- stick.x=Math.max(-1,Math.min(1,dx/max));
- stick.y=Math.max(-1,Math.min(1,dy/max));
+function setKnob(dx,dy){knob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;}
+function stickSetXY(clientX,clientY){
+ const r=stickEl.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
+ let dx=clientX-cx,dy=clientY-cy,max=Math.max(24,r.width*.34),m=Math.hypot(dx,dy)||1;
+ if(m>max){dx*=max/m;dy*=max/m;} setKnob(dx,dy); stick.x=dx/max; stick.y=dy/max;
 }
 function resetStick(){stick.active=false;stick.id=null;stick.x=0;stick.y=0;setKnob(0,0);}
-
-stickEl.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();stick.active=true;stick.id=e.pointerId;stickEl.setPointerCapture(e.pointerId);stickSet(e.clientX,e.clientY);},{passive:false});
-stickEl.addEventListener('pointermove',e=>{if(e.pointerId===stick.id){e.preventDefault();stickSet(e.clientX,e.clientY)}},{passive:false});
-for(const ev of ['pointerup','pointercancel','lostpointercapture'])stickEl.addEventListener(ev,resetStick,{passive:false});
-
+function setLook(lastX,lastY){look.x=lastX;look.y=lastY;}
+function applyLook(dx,dy){player.yaw-=dx*.005;player.pitch=Math.max(-1.35,Math.min(1.35,player.pitch-dy*.004));}
+function begin(e){
+ if(!started)return; e.preventDefault();
+ const x=e.clientX,y=e.clientY;
+ if(x<innerWidth*.42){ if(e.pointerId!==undefined){stick.active=true;stick.id=e.pointerId;stickEl.setPointerCapture?.(e.pointerId);} stickSetXY(x,y); }
+ else {look.active=true;look.id=e.pointerId;setLook(x,y);lookSurface.setPointerCapture?.(e.pointerId);}
+}
+function move(e){
+ if(!started)return; e.preventDefault();
+ if(stick.active && e.pointerId===stick.id){stickSetXY(e.clientX,e.clientY);return;}
+ if(look.active && e.pointerId===look.id){applyLook(e.clientX-look.x,e.clientY-look.y);setLook(e.clientX,e.clientY);}
+}
+function end(e){if(e.pointerId===stick.id)resetStick();if(e.pointerId===look.id){look.active=false;look.id=null;}}
+for(const el of [canvas,lookSurface,stickEl]){el.addEventListener('pointerdown',begin,{passive:false});el.addEventListener('pointermove',move,{passive:false});el.addEventListener('pointerup',end,{passive:false});el.addEventListener('pointercancel',end,{passive:false});}
+// iOS Safari fallback: direct TouchEvents, allowing two simultaneous touches.
+let touchStickId=null,touchLookId=null,touchLastX=0,touchLastY=0;
+document.addEventListener('touchstart',e=>{
+ if(window.PointerEvent)return;
+ if(!started)return; e.preventDefault();
+ for(const t of e.changedTouches){if(touchStickId===null && t.clientX<innerWidth*.42){touchStickId=t.identifier;stickSetXY(t.clientX,t.clientY);} else if(touchLookId===null && t.clientX>=innerWidth*.42){touchLookId=t.identifier;touchLastX=t.clientX;touchLastY=t.clientY;}}
+},{passive:false});
+document.addEventListener('touchmove',e=>{
+ if(window.PointerEvent)return;
+ if(!started)return; e.preventDefault();
+ for(const t of e.changedTouches){if(t.identifier===touchStickId)stickSetXY(t.clientX,t.clientY);if(t.identifier===touchLookId){applyLook(t.clientX-touchLastX,t.clientY-touchLastY);touchLastX=t.clientX;touchLastY=t.clientY;}}
+},{passive:false});
+function endTouch(id){if(id===touchStickId){touchStickId=null;resetStick();}if(id===touchLookId){touchLookId=null;look.active=false;}}
+document.addEventListener('touchend',e=>{if(window.PointerEvent)return;for(const t of e.changedTouches)endTouch(t.identifier);},{passive:false});
+document.addEventListener('touchcancel',e=>{if(window.PointerEvent)return;for(const t of e.changedTouches)endTouch(t.identifier);},{passive:false});
 runBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();running=true;runBtn.classList.add('pressed');},{passive:false});
-for(const ev of ['pointerup','pointercancel','pointerleave'])runBtn.addEventListener(ev,e=>{running=false;runBtn.classList.remove('pressed')},{passive:false});
-
-function beginLook(e){
- if(!started || e.pointerType==='mouse')return;
- e.preventDefault();
- look.active=true;look.id=e.pointerId;look.x=e.clientX;look.y=e.clientY;
- lookSurface.setPointerCapture?.(e.pointerId);
-}
-function moveLook(e){
- if(!look.active || e.pointerId!==look.id)return;
- e.preventDefault();
- const dx=e.clientX-look.x,dy=e.clientY-look.y;
- look.x=e.clientX;look.y=e.clientY;
- player.yaw-=dx*.0050;
- player.pitch=Math.max(-1.35,Math.min(1.35,player.pitch-dy*.0040));
-}
-function endLook(e){if(e.pointerId===look.id){look.active=false;look.id=null;}}
-lookSurface.addEventListener('pointerdown',beginLook,{passive:false});
-lookSurface.addEventListener('pointermove',moveLook,{passive:false});
-lookSurface.addEventListener('pointerup',endLook,{passive:false});
-lookSurface.addEventListener('pointercancel',endLook,{passive:false});
+for(const ev of ['pointerup','pointercancel','pointerleave'])runBtn.addEventListener(ev,()=>{running=false;runBtn.classList.remove('pressed')},{passive:false});
+runBtn.addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();running=true;runBtn.classList.add('pressed')},{passive:false});
+runBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();running=false;runBtn.classList.remove('pressed')},{passive:false});
 
 // Desktop: click to capture the mouse and use true FPS mouse look.
 let pointerLocked=false;
@@ -413,12 +397,11 @@ for(const n of ['gesturestart','gesturechange','gestureend'])addEventListener(n,
 
 function collides(nx,nz){
  const r=.42;
+ if(Math.abs(nx)>142||Math.abs(nz)>142)return true;
  for(const c of colliders){
-   // All city colliders are currently axis-aligned boxes; use their stored
-   // footprint and a small player radius. The yaw is kept for future detail.
    if(Math.abs(nx-c.x)<c.sx+r && Math.abs(nz-c.z)<c.sz+r)return true;
  }
- return Math.abs(nx)>142||Math.abs(nz)>142;
+ return false;
 }
 function update(dt){
  let f=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0);
