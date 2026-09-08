@@ -5,6 +5,16 @@ const canvas=document.getElementById("game");
 const gl=canvas.getContext("webgl2",{antialias:true,alpha:false,preserveDrawingBuffer:false});
 if(!gl){document.body.innerHTML="<div style='padding:24px;color:#fff;font-family:sans-serif'>このブラウザはWebGL2に対応していません。</div>";return;}
 
+// Bind the boot button before heavy city generation. This prevents the start
+// overlay from becoming a dead UI while the procedural district is building.
+const startEl=document.getElementById("start");
+const enterEl=document.getElementById("enter");
+let startPressed=false;
+enterEl?.addEventListener("click",()=>{
+  startPressed=true;
+  startEl.style.display="none";
+},{passive:true});
+
 const VS=`#version 300 es
 precision highp float;
 layout(location=0) in vec3 p;
@@ -92,11 +102,25 @@ function face(a,b,c,d,n,uv,tint){
  const vs=[a,b,c,a,c,d], us=[[u0,v0],[u1,v0],[u1,v1],[u0,v0],[u1,v1],[u0,v1]];
  for(let i=0;i<6;i++){P.push(...vs[i]);C.push(...n);UV.push(us[i][0],us[i][1]);COL.push(tint[0],tint[1],tint[2],tint[3] ?? 0)}
 }
+const MATERIAL_ALIAS={
+ concrete:"t10", brick:"t0", plaster:"t20", metal:"t43", wood:"t53", leaf:"t72",
+ glass:"t33", dark:"t79", asphalt:"t70", sidewalk:"t13", curb:"t12", lane:"t89",
+};
+function resolveMaterial(material){
+ if(Array.isArray(material)){
+   const name=material[0];
+   const key=REAL[name]||MATERIAL_ALIAS[name]||name;
+   return {uv:A[key]||A.t10,tint:material[1]||[1,1,1,0],source:name};
+ }
+ if(typeof material!=="string") return {uv:A.t10,tint:[1,1,1,0],source:"concrete"};
+ if(material[0]==="#") return {uv:A.t10,tint:[...rgb(material),0],source:material};
+ const key=REAL[material]||MATERIAL_ALIAS[material]||material;
+ return {uv:A[key]||A.t10,tint:[1,1,1,0],source:material};
+}
 function addBox(x,y,z,sx,sy,sz,material="#ffffff",yaw=0,solid=false){
- const sourceMaterial=material;
- if(typeof material==="string" && REAL[material]) material=REAL[material];
- let t=A[material]||A.concrete, tint=material==="#ffffff"?[1,1,1,0]:[...rgb(material),0];
- if(Array.isArray(material)){t=A[material[0]]||A.concrete;tint=material[1]}
+ const resolved=resolveMaterial(material);
+ const sourceMaterial=resolved.source;
+ let t=resolved.uv, tint=resolved.tint;
  if(typeof sourceMaterial==='string' && /^(window_lit|light)$/.test(sourceMaterial)) tint=[1,1,1,1];
  if(typeof sourceMaterial==='string' && sourceMaterial==='neon_base') tint=[1,1,1,.8];
  const [c,s]=[Math.cos(yaw),Math.sin(yaw)];
@@ -115,11 +139,12 @@ function addBox(x,y,z,sx,sy,sz,material="#ffffff",yaw=0,solid=false){
  if(solid)colliders.push({x,z,sx,sz,y,sy,yaw});
 }
 function addCylinder(x,y,z,r,h,material,segments=10){
- const tint=A[material]||A.metal;
+ const resolved=resolveMaterial(material);
+ const uv=resolved.uv;
  for(let i=0;i<segments;i++){
   const a=i*Math.PI*2/segments,b=(i+1)*Math.PI*2/segments;
   const x1=x+Math.cos(a)*r,z1=z+Math.sin(a)*r,x2=x+Math.cos(b)*r,z2=z+Math.sin(b)*r;
-  face([x1,y-h,z1],[x2,y-h,z2],[x2,y,z2],[x1,y,z1],[Math.cos((a+b)/2),0,Math.sin((a+b)/2)],tint,[.9,.9,.9,1]);
+  face([x1,y-h,z1],[x2,y-h,z2],[x2,y,z2],[x1,y,z1],[Math.cos((a+b)/2),0,Math.sin((a+b)/2)],uv,[.9,.9,.9,0]);
  }
 }
 function roadBox(){addBox(0,-.07,0,110,.07,110,"asphalt");}
@@ -332,7 +357,7 @@ const player={x:0,y:1.72,z:0,yaw:0,pitch:0};
 const keys=Object.create(null);
 const stick={active:false,id:null,x:0,y:0};
 const look={active:false,id:null,x:0,y:0};
-let running=false,started=false;
+let running=false,started=startPressed;
 const stickEl=document.getElementById('stick'),knob=document.getElementById('knob'),runBtn=document.getElementById('runBtn');
 const lookSurface=document.getElementById('lookSurface');
 function setKnob(dx,dy){knob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;}
@@ -387,11 +412,11 @@ document.addEventListener('mousemove',e=>{
  player.pitch=Math.max(-1.35,Math.min(1.35,player.pitch-e.movementY*.0020));
 });
 
-document.getElementById('enter').addEventListener('click',()=>{
+// ENTER CITY is bound at boot; only desktop pointer-lock is requested here.
+enterEl?.addEventListener('click',()=>{
  started=true;
- document.getElementById('start').style.display='none';
  if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();
-});
+},{once:true});
 addEventListener('contextmenu',e=>e.preventDefault());
 for(const n of ['gesturestart','gesturechange','gestureend'])addEventListener(n,e=>e.preventDefault(),{passive:false});
 
