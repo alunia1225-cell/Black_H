@@ -1,22 +1,28 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>BLACK HARVEST — City Prototype</title>
-<link rel="stylesheet" href="style.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<title>BLACK HARVEST — New City Build</title>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
-<canvas id="game" style="touch-action:none;user-select:none;-webkit-user-select:none;"></canvas>
-<div id="hud"><div class="brand">BLACK HARVEST</div><div class="sub">REALISTIC CITY BLOCK</div><div id="stats">12:00  |  CITY LOADING  |  MOVE READY</div><div class="help">左アナログパッド：移動　右スワイプ：視点　RUN：ダッシュ</div></div>
-<div id="crosshair"></div>
-<div id="lookSurface" aria-hidden="true"></div>
-<div id="mobile">
-  <div id="stick"><div id="knob"></div></div>
-  <div id="lookHint">SWIPE</div>
-  <button id="runBtn">RUN</button>
+<canvas id="game"></canvas>
+<div id="bootError" hidden></div>
+<div id="startScreen">
+  <div class="logo">BLACK HARVEST</div>
+  <div class="tag">NEW CITY BUILD</div>
+  <button id="enterCity">ENTER CITY</button>
+  <div class="hint">Touch: left = move · right = look · RUN = sprint</div>
 </div>
-<div id="start"><div class="panel"><div class="title">BLACK HARVEST</div><div class="desc">OFFLINE / WEBGL2 / BLACK HARVEST • URBAN DISTRICT</div><button id="enter">ENTER CITY</button><div class="small">左アナログパッドで移動。右側をスワイプして視点操作。</div></div></div>
+<div id="hud" hidden>
+  <div class="topbar"><span id="clock">09:00</span><span id="status">CITY</span></div>
+  <div id="crosshair">+</div>
+  <div id="leftPad"><div id="leftKnob"></div></div>
+  <div id="runButton">RUN</div>
+  <div id="lookZone"></div>
+  <div id="help">WASD / mouse on desktop</div>
+</div>
 <script src="main.js"></script>
-</body></html>
+</body>
+</html>
