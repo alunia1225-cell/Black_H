@@ -39,3 +39,5 @@
 
 /* Final FPS input layer */
 #fpsLookSurface{z-index:8;pointer-events:auto;touch-action:none!important} #stick,#run{z-index:30;pointer-events:auto}
+
+#mobile{z-index:30}#stick,#runBtn{touch-action:none!important}#game{touch-action:none!important;cursor:crosshair}#knob{left:50%;top:50%;transform:translate(-50%,-50%)}

@@ -21,17 +21,20 @@ in vec3 vN; in vec2 vUV; in vec4 vTint; in vec3 vW;
 uniform sampler2D atlas;
 uniform vec3 sunDir;
 uniform vec3 cam;
+uniform float dayFactor;
+uniform float nightFactor;
 out vec4 outColor;
 void main(){
  vec4 tex=texture(atlas,vUV);
  float lam=max(dot(normalize(vN),normalize(sunDir)),0.0);
- float hemi=.46+.54*lam;
+ float hemi=(.60+.40*lam)*(.68+.32*dayFactor);
  vec3 c=tex.rgb*vTint.rgb*hemi;
  // Windows carry a warm emissive lift.
  float warm=smoothstep(.56,.8,tex.r)*vTint.a;
- c+=vec3(.10,.065,.025)*warm;
+ c+=vec3(.10,.065,.025)*warm*(0.55+0.9*nightFactor);
  float fog=smoothstep(115.0,180.0,length(vW-cam));
- c=mix(c,vec3(.40,.43,.45),fog*.72);
+ vec3 sky=mix(vec3(.48,.52,.56),vec3(.055,.065,.085),nightFactor);
+ c=mix(c,sky,fog*.52);
  outColor=vec4(c,1.0);
 }`;
 
@@ -39,16 +42,26 @@ function compile(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);
 const prog=gl.createProgram();gl.attachShader(prog,compile(gl.VERTEX_SHADER,VS));gl.attachShader(prog,compile(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
 if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));
 gl.useProgram(prog);
-const vpLoc=gl.getUniformLocation(prog,"vp"), sunLoc=gl.getUniformLocation(prog,"sunDir"), camLoc=gl.getUniformLocation(prog,"cam");
+const vpLoc=gl.getUniformLocation(prog,"vp"), sunLoc=gl.getUniformLocation(prog,"sunDir"), camLoc=gl.getUniformLocation(prog,"cam"), dayLoc=gl.getUniformLocation(prog,"dayFactor"), nightLoc=gl.getUniformLocation(prog,"nightFactor");
 
 const atlas=new Image(); atlas.src="city_atlas.png";
 let texture=null,ready=false;
 atlas.onload=()=>{texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,atlas);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);ready=true};
 
-const A={concrete:[0,.0,.25,.25],brick:[.25,0,.5,.25],glass:[.5,0,.75,.25],window:[.75,0,1,.25],
-asphalt:[0,.25,.25,.5],sidewalk:[.25,.25,.5,.5],roof:[.5,.25,.75,.5],dark:[.75,.25,1,.5],
-metal:[0,.5,.25,.75],grass:[.25,.5,.5,.75],sign_red:[.5,.5,.75,.75],sign_blue:[.75,.5,1,.75],
-lane:[0,.75,.25,1],light:[.25,.75,.5,1],wood:[.5,.75,.75,1],leaf:[.75,.75,1,1]};
+const OV=512/896; const A={
+concrete:[0,0,.25,OV*.25],brick:[.25,0,.5,OV*.25],glass:[.5,0,.75,OV*.25],window:[.75,0,1,OV*.25],
+asphalt:[0,OV*.25,.25,OV*.5],sidewalk:[.25,OV*.25,.5,OV*.5],roof:[.5,OV*.25,.75,OV*.5],dark:[.75,OV*.25,1,OV*.5],
+metal:[0,OV*.5,.25,OV*.75],grass:[.25,OV*.5,.5,OV*.75],sign_red:[.5,OV*.5,.75,OV*.75],sign_blue:[.75,OV*.5,1,OV*.75],
+lane:[0,OV*.75,.25,OV],light:[.25,OV*.75,.5,OV],wood:[.5,OV*.75,.75,OV],leaf:[.75,OV*.75,1,OV]};
+for(let i=0;i<48;i++){const col=i%8,row=Math.floor(i/8),u0=col/8,u1=(col+1)/8,v0=(512+row*64)/896,v1=(512+(row+1)*64)/896;A['real'+i]=[u0,v0,u1,v1];}
+const REAL={
+ brick_red:'real0',brick_dark:'real1',plaster_cream:'real2',plaster_old:'real3',concrete_light:'real4',concrete_stain:'real5',
+ metal_panel:'real6',metal_rust:'real7',tile_blue:'real8',tile_green:'real9',stone:'real10',wood_dark:'real11',shutter:'real12',
+ shop_glass:'real13',office_glass:'real14',dirty_glass:'real15',sign_white:'real16',sign_red2:'real17',sign_yellow:'real18',sign_blue2:'real19',
+ roof_tar:'real20',roof_metal:'real21',ac_unit:'real22',rollup:'real23',door_metal:'real24',door_wood:'real25',awning:'real26',
+ asphalt_patch:'real27',sidewalk_crack:'real28',wall_graffiti:'real29',wall_moss:'real30',wall_water:'real31',window_lit:'real32',
+ window_dark:'real33',window_reflect:'real34',curb:'real35',paint_worn:'real36',paint_blue:'real37',paint_green:'real38',paint_brown:'real39',
+ warehouse_panel:'real40',warehouse_door:'real41',utility_wood:'real42',utility_metal:'real43',neon_base:'real44',canopy:'real45',parking_mark:'real46',bollard:'real47'};
 
 const P=[],C=[],COL=[];
 const colliders=[];
@@ -67,6 +80,7 @@ function face(a,b,c,d,n,uv,tint){
  for(let i=0;i<6;i++){P.push(...vs[i]);C.push(...n);UV.push(us[i][0],us[i][1]);COL.push(...tint,1)}
 }
 function addBox(x,y,z,sx,sy,sz,material="#ffffff",yaw=0,solid=false){
+ if(typeof material==="string" && REAL[material]) material=REAL[material];
  let t=A[material]||A.concrete, tint=material==="#ffffff"?[1,1,1]:rgb(material);
  if(Array.isArray(material)){t=A[material[0]]||A.concrete;tint=material[1]}
  const [c,s]=[Math.cos(yaw),Math.sin(yaw)];
@@ -141,7 +155,7 @@ for(const p of roads){
 }
 
 // Building generator.
-const buildingMats=["concrete","brick","glass"];
+const buildingMats=["concrete_light","brick_red","plaster_cream","brick_dark","plaster_old","metal_panel","tile_blue","tile_green","stone","paint_worn","paint_blue","paint_green","paint_brown","warehouse_panel"];
 let seed=92317;
 const R=rand(seed);
 function building(x,z,w,d,h,style){
@@ -158,8 +172,9 @@ function building(x,z,w,d,h,style){
     if(wy>h-.7)continue;
     const ww=Math.min(1.05,w/cols*.54);
     const on=((c*17+r*13+style*7)%9)<6;
-    addBox(wx,wy,z-d/2-.035,ww,.68,.025,on?"window":"dark");
-    addBox(wx,wy,z+d/2+.035,ww,.68,.025,on?"window":"dark");
+    const wmat=on?(style%5===0?"window_lit":style%5===1?"window_reflect":"window"):"window_dark";
+    addBox(wx,wy,z-d/2-.035,ww,.68,.025,wmat);
+    addBox(wx,wy,z+d/2+.035,ww,.68,.025,wmat);
   }
   const sc=Math.max(2,Math.floor(d/3.0));
   for(let r=0;r<rows;r++)for(let c=0;c<sc;c++){
@@ -303,33 +318,17 @@ document.addEventListener("pointerlockchange",()=>locked=document.pointerLockEle
 document.addEventListener("mousemove",e=>{if(!locked)return;player.yaw-=e.movementX*.0022;player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-e.movementY*.0018))});
 
 const stickEl=document.getElementById("stick"),knob=document.getElementById("knob"),runBtn=document.getElementById("runBtn");
-function stickSet(t){
- const r=stickEl.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
- let dx=t.clientX-cx,dy=t.clientY-cy,m=Math.hypot(dx,dy)||1,max=34,k=Math.min(1,max/m);
- dx*=k;dy*=k;knob.style.transform=`translate(${dx}px,${dy}px)`;stick.x=dx/max;stick.y=dy/max;
-}
-stickEl.addEventListener("touchstart",e=>{e.preventDefault();const t=e.changedTouches[0];stick.active=true;stick.id=t.identifier;stickSet(t)},{passive:false});
-stickEl.addEventListener("touchmove",e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===stick.id)stickSet(t)},{passive:false});
-function endStick(e){for(const t of e.changedTouches)if(t.identifier===stick.id){stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"}}
-stickEl.addEventListener("touchend",endStick,{passive:false});stickEl.addEventListener("touchcancel",endStick,{passive:false});
-runBtn.addEventListener("touchstart",e=>{e.preventDefault();running=true;runBtn.classList.add("pressed")},{passive:false});
-runBtn.addEventListener("touchend",e=>{e.preventDefault();running=false;runBtn.classList.remove("pressed")},{passive:false});
-runBtn.addEventListener("touchcancel",()=>{running=false;runBtn.classList.remove("pressed")},{passive:false});
-
-canvas.addEventListener("touchstart",e=>{
- for(const t of e.changedTouches)if(t.clientX>innerWidth*.34&&!look.active){look.active=true;look.id=t.identifier;look.x=t.clientX;look.y=t.clientY}
- e.preventDefault();
-},{passive:false});
-canvas.addEventListener("touchmove",e=>{
- for(const t of e.changedTouches)if(look.active&&t.identifier===look.id){
-   player.yaw-= (t.clientX-look.x)*.006;
-   player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-(t.clientY-look.y)*.0048));
-   look.x=t.clientX;look.y=t.clientY;
- }
- e.preventDefault();
-},{passive:false});
-function endLook(e){for(const t of e.changedTouches)if(look.active&&t.identifier===look.id){look.active=false;look.id=null}}
-canvas.addEventListener("touchend",endLook,{passive:false});canvas.addEventListener("touchcancel",endLook,{passive:false});
+function stickSet(x,y){const r=stickEl.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=x-cx,dy=y-cy,m=Math.hypot(dx,dy)||1,max=Math.max(28,r.width*.30),k=Math.min(1,max/m);dx*=k;dy*=k;knob.style.transform=`translate(${dx}px,${dy}px)`;stick.x=dx/max;stick.y=dy/max;}
+stickEl.style.touchAction="none";
+stickEl.addEventListener("pointerdown",e=>{e.preventDefault();stick.active=true;stick.id=e.pointerId;stickEl.setPointerCapture(e.pointerId);stickSet(e.clientX,e.clientY)},{passive:false});
+stickEl.addEventListener("pointermove",e=>{if(e.pointerId===stick.id){e.preventDefault();stickSet(e.clientX,e.clientY)}},{passive:false});
+function endStick(e){if(e.pointerId===stick.id){stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"}}
+stickEl.addEventListener("pointerup",endStick,{passive:false});stickEl.addEventListener("pointercancel",endStick,{passive:false});stickEl.addEventListener("lostpointercapture",e=>{stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"});
+runBtn.addEventListener("pointerdown",e=>{e.preventDefault();running=true;runBtn.classList.add("pressed");runBtn.setPointerCapture(e.pointerId)},{passive:false});
+runBtn.addEventListener("pointerup",e=>{e.preventDefault();running=false;runBtn.classList.remove("pressed")},{passive:false});runBtn.addEventListener("pointercancel",()=>{running=false;runBtn.classList.remove("pressed")});
+canvas.addEventListener("pointerdown",e=>{if(e.pointerType!=="mouse" && e.clientX>innerWidth*.42&&!look.active){look.active=true;look.id=e.pointerId;look.x=e.clientX;look.y=e.clientY;canvas.setPointerCapture(e.pointerId);}},{passive:false});
+canvas.addEventListener("pointermove",e=>{if(look.active&&e.pointerId===look.id){e.preventDefault();player.yaw-=(e.clientX-look.x)*.006;player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-(e.clientY-look.y)*.0048));look.x=e.clientX;look.y=e.clientY;}},{passive:false});
+canvas.addEventListener("pointerup",e=>{if(e.pointerId===look.id){look.active=false;look.id=null;}},{passive:false});canvas.addEventListener("pointercancel",e=>{if(e.pointerId===look.id){look.active=false;look.id=null;}},{passive:false});
 canvas.addEventListener("click",()=>{if(matchMedia("(pointer:fine)").matches)canvas.requestPointerLock()});
 
 document.getElementById("enter").onclick=()=>{
@@ -386,6 +385,16 @@ gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
 gl.clearColor(.34,.38,.40,1);
 
 let last=performance.now(),fps=60,frames=0,ft=last;
+let worldTime=12.0;
+const DAY_LENGTH=180.0;
+function timeLighting(t){
+  const ang=(t/24)*Math.PI*2-Math.PI/2;
+  const sun=Math.max(0,Math.sin(ang));
+  const night=1-Math.max(0,Math.min(1,(sun-.02)/.18));
+  return {sun,night};
+}
+function formatWorldTime(t){let h=Math.floor(t)%24,m=Math.floor((t%1)*60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+
 function render(){
  if(!ready)return;
  const pv=mul(persp(Math.PI/3,canvas.width/canvas.height,.05,220),view());
@@ -396,242 +405,10 @@ function render(){
  gl.drawArrays(gl.TRIANGLES,0,count);
 }
 function loop(now){
- const dt=Math.min(.05,(now-last)/1000);last=now;update(dt);render();
- frames++;if(now-ft>600){fps=Math.round(frames*1000/(now-ft));frames=0;ft=now;document.getElementById("stats").textContent=fps+" FPS  |  CITY "+Math.round(count/36)+" tris/box-equivalent";}
+ const dt=Math.min(.05,(now-last)/1000);last=now;worldTime=(worldTime+(dt*24/DAY_LENGTH))%24;update(dt);render();
+ document.getElementById("stats").textContent=`${fps} FPS  |  ${formatWorldTime(worldTime)}  |  CITY ${Math.round(count/36)} tris/box-equivalent`;
+ frames++;if(now-ft>600){fps=Math.round(frames*1000/(now-ft));frames=0;ft=now;}
  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
-})();
-
-
-// BLACK_HARVEST_FPS_TOUCH_V6
-// Mobile FPS controls:
-// left virtual analog stick = movement, right touch area = camera yaw + pitch.
-(function setupMobileFPSControls(){
-  const stick = document.querySelector('#stick');
-  const knob = document.querySelector('#knob');
-  const canvas = document.querySelector('#game');
-  if(!stick || !knob) return;
-
-  let moveId=null, lookId=null;
-  let mx=0,my=0;
-  let lx=0,ly=0;
-  let lastX=0,lastY=0;
-  const dead=0.10;
-
-  function setKnob(dx,dy){
-    const rect=stick.getBoundingClientRect();
-    const max=Math.max(20, rect.width*0.30);
-    const len=Math.hypot(dx,dy);
-    if(len>max){ dx=dx/len*max; dy=dy/len*max; }
-    knob.style.transform=`translate(${dx}px,${dy}px)`;
-    mx=dx/max; my=dy/max;
-    if(Math.hypot(mx,my)<dead) mx=my=0;
-  }
-  function resetMove(){
-    moveId=null; mx=0; my=0;
-    knob.style.transform='translate(-50%,-50%)';
-  }
-
-  stick.addEventListener('pointerdown',e=>{
-    e.preventDefault();
-    moveId=e.pointerId;
-    stick.setPointerCapture(e.pointerId);
-    const r=stick.getBoundingClientRect();
-    setKnob(e.clientX-(r.left+r.width/2), e.clientY-(r.top+r.height/2));
-  },{passive:false});
-
-  stick.addEventListener('pointermove',e=>{
-    if(e.pointerId!==moveId)return;
-    e.preventDefault();
-    const r=stick.getBoundingClientRect();
-    setKnob(e.clientX-(r.left+r.width/2), e.clientY-(r.top+r.height/2));
-  },{passive:false});
-
-  ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>{
-    stick.addEventListener(ev,e=>{if(moveId===e.pointerId||ev==='lostpointercapture')resetMove();},{passive:false});
-  });
-
-  // Full right half is the camera-look surface.
-  const lookSurface=document.createElement('div');
-  lookSurface.id='fpsLookSurface';
-  document.body.appendChild(lookSurface);
-
-  lookSurface.addEventListener('pointerdown',e=>{
-    if(e.clientX < innerWidth*0.48) return;
-    e.preventDefault();
-    lookId=e.pointerId;
-    lookSurface.setPointerCapture(e.pointerId);
-    lastX=e.clientX; lastY=e.clientY;
-  },{passive:false});
-
-  lookSurface.addEventListener('pointermove',e=>{
-    if(e.pointerId!==lookId)return;
-    e.preventDefault();
-    const dx=e.clientX-lastX, dy=e.clientY-lastY;
-    lastX=e.clientX; lastY=e.clientY;
-    // Feed the existing camera variables if present.
-    if(typeof yaw!=='undefined') yaw -= dx*0.0065;
-    if(typeof pitch!=='undefined'){
-      pitch -= dy*0.0055;
-      pitch=Math.max(-1.25,Math.min(1.25,pitch));
-    }
-    // Common alternate variable names.
-    if(typeof camYaw!=='undefined') camYaw -= dx*0.0065;
-    if(typeof camPitch!=='undefined'){
-      camPitch -= dy*0.0055;
-      camPitch=Math.max(-1.25,Math.min(1.25,camPitch));
-    }
-  },{passive:false});
-
-  ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>{
-    lookSurface.addEventListener(ev,e=>{if(lookId===e.pointerId||ev==='lostpointercapture')lookId=null;},{passive:false});
-  });
-
-  // Expose movement state for the frame loop to consume.
-  window.blackHarvestFPSInput={getMove:()=>({x:mx,y:my})};
-})();
-
-
-// Legacy input bridge retained for compatibility; final FPS controller owns movement.
-(function(){
-  const oldRAF=window.requestAnimationFrame;
-  // Input values are exposed globally; existing movement can consume them.
-  // If the source already has vx/vz or player movement variables, map the analog vector.
-  setInterval(()=>{
-    const s=window.blackHarvestFPSInput;
-    if(!s)return;
-    const v=s.getMove();
-    window.blackHarvestMoveX=v.x;
-    window.blackHarvestMoveY=v.y;
-  },16);
-})();
-
-
-// BLACK_HARVEST_FPS_CONTROLLER_FINAL
-(function(){
-  const state={
-    x:0, y:1.72, z:0,
-    yaw:0, pitch:0,
-    walk:4.2, run:7.2,
-    moveX:0, moveY:0, runHeld:false,
-    initialized:false
-  };
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-
-  function setup(){
-    const stick=document.querySelector('#stick'), knob=document.querySelector('#knob');
-    const run=document.querySelector('#run');
-    if(!stick||!knob) return;
-    let id=null;
-    const radius=()=>Math.max(28,stick.getBoundingClientRect().width*.30);
-    function set(e){
-      const r=stick.getBoundingClientRect();
-      let dx=e.clientX-(r.left+r.width/2), dy=e.clientY-(r.top+r.height/2);
-      const R=radius(), l=Math.hypot(dx,dy);
-      if(l>R){dx=dx/l*R;dy=dy/l*R;}
-      knob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-      const dead=.10, x=dx/R, y=dy/R;
-      state.moveX=Math.abs(x)<dead?0:x;
-      state.moveY=Math.abs(y)<dead?0:y;
-    }
-    stick.onpointerdown=e=>{e.preventDefault();id=e.pointerId;stick.setPointerCapture(id);set(e);}
-    stick.onpointermove=e=>{if(e.pointerId===id){e.preventDefault();set(e);}}
-    stick.onpointerup=stick.onpointercancel=()=>{id=null;state.moveX=state.moveY=0;knob.style.transform='translate(-50%,-50%)';};
-    if(run){
-      run.onpointerdown=e=>{e.preventDefault();state.runHeld=true;}
-      run.onpointerup=run.onpointercancel=run.onpointerleave=()=>state.runHeld=false;
-    }
-
-    const look=document.querySelector('#fpsLookSurface');
-    if(look){
-      let lid=null,lx=0,ly=0;
-      look.onpointerdown=e=>{
-        if(e.clientX<innerWidth*.44)return;
-        e.preventDefault();lid=e.pointerId;look.setPointerCapture(lid);lx=e.clientX;ly=e.clientY;
-      };
-      look.onpointermove=e=>{
-        if(e.pointerId!==lid)return;
-        e.preventDefault();
-        const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;
-        state.yaw-=dx*.006; state.pitch=clamp(state.pitch-dy*.0045,-1.25,1.25);
-      };
-      look.onpointerup=look.onpointercancel=()=>lid=null;
-    }
-    state.initialized=true;
-  }
-
-  // Ray-box collision against the existing global collision list when available.
-  function blocked(nx,nz){
-    const list=window.collisionBoxes||window.colliders||window.COLLIDERS;
-    if(!Array.isArray(list)) return false;
-    const r=.34;
-    for(const b of list){
-      if(!b)continue;
-      const minX=b.minX??b.x1??(b.x-b.w/2), maxX=b.maxX??b.x2??(b.x+b.w/2);
-      const minZ=b.minZ??b.z1??(b.z-b.d/2), maxZ=b.maxZ??b.z2??(b.z+b.d/2);
-      if(nx+r>minX&&nx-r<maxX&&nz+r>minZ&&nz-r<maxZ)return true;
-    }
-    return false;
-  }
-
-  function tick(dt){
-    if(!state.initialized)setup();
-    const len=Math.hypot(state.moveX,state.moveY);
-    if(len<.001)return;
-    const mx=state.moveX, mz=state.moveY;
-    const speed=(state.runHeld?state.run:state.walk)*Math.min(1,len);
-    const fx=-Math.sin(state.yaw), fz=-Math.cos(state.yaw);
-    const rx=Math.cos(state.yaw), rz=-Math.sin(state.yaw);
-    const dx=(rx*mx + fx*(-mz))*speed*dt;
-    const dz=(rz*mx + fz*(-mz))*speed*dt;
-    const nx=state.x+dx,nz=state.z+dz;
-    if(!blocked(nx,state.z))state.x=nx;
-    if(!blocked(state.x,nz))state.z=nz;
-  }
-
-  // Export stable state for renderer integration.
-  window.blackHarvestFPS={
-    state,
-    tick,
-    getCamera(){return {x:state.x,y:state.y,z:state.z,yaw:state.yaw,pitch:state.pitch};}
-  };
-
-  // Integrate with whichever loop the current prototype exposes.
-  function integrate(){
-    const candidates=['render','frame','update','loop','animate','draw'];
-    for(const n of candidates){
-      const fn=window[n];
-      if(typeof fn!=='function'||fn.__bhfps)return;
-      const wrapped=function(...args){
-        const now=performance.now();
-        const last=wrapped._last??now;
-        const dt=Math.min(.05,(now-last)/1000); wrapped._last=now;
-        state.tick(dt);
-        return fn.apply(this,args);
-      };
-      wrapped.__bhfps=true; wrapped._last=performance.now();
-      window[n]=wrapped;
-      return true;
-    }
-    return false;
-  }
-
-  // Patch camera/view matrices by exposing a canonical camera object. If the renderer uses
-  // common globals, mirror them so the generated city becomes a true first-person view.
-  setInterval(()=>{
-    if(!state.initialized)setup();
-    window.bhCamera=window.blackHarvestFPS.getCamera();
-    if('camX' in window)window.camX=state.x;
-    if('camY' in window)window.camY=state.y;
-    if('camZ' in window)window.camZ=state.z;
-    if('cameraX' in window)window.cameraX=state.x;
-    if('cameraY' in window)window.cameraY=state.y;
-    if('cameraZ' in window)window.cameraZ=state.z;
-    if('yaw' in window)window.yaw=state.yaw;
-    if('pitch' in window)window.pitch=state.pitch;
-  },16);
-
-  setup();
-  integrate();
 })();
