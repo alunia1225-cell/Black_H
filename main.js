@@ -158,16 +158,155 @@ function dumpster(x,z){
   box(3.15,.12,1.95,trimMat,0,1.58,0,0,0,0,g);
 }
 
+
+function grimeMaterial(base, rough=.94){
+  return new THREE.MeshStandardMaterial({color:base,roughness:rough,metalness:0});
+}
+const dirtMat=grimeMaterial(0x403d37), paintDark=grimeMaterial(0x4d514c), windowFrame=grimeMaterial(0x292b29,.72);
+const woodMat=grimeMaterial(0x665548), roofEdge=grimeMaterial(0x20211f,.9), pipeMat=grimeMaterial(0x4c504b,.8);
+const neonOff=grimeMaterial(0x705d4a,.8), paperMat=grimeMaterial(0xb5aa8e,.98);
+
+function trimWindow(g,x,y,z,w,h,front=true){
+  const zz=z+(front?-.10:.10);
+  box(w,h,.12,darkGlass,x,y,zz);
+  box(w+.18,.11,.20,windowFrame,x,y+h/2+.05,zz);
+  box(w+.18,.11,.20,windowFrame,x,y-h/2-.05,zz);
+  box(.10,h+.18,.20,windowFrame,x-w/2-.05,y,zz);
+  box(.10,h+.18,.20,windowFrame,x+w/2+.05,y,zz);
+  box(.06,h-.12,.16,windowFrame,x,y,zz-.02);
+  box(w-.12,.05,.14,windowFrame,x,y,zz-.02);
+}
+
+function wallAC(g,x,y,z){
+  box(1.35,.72,.62,paintDark,x,y,z);
+  box(1.02,.38,.10,windowFrame,x,y,z-.34);
+  for(let i=-3;i<=3;i++) box(.055,.28,.12,pipeMat,x+i*.14,y,z-.42);
+  box(.16,.16,1.4,pipeMat,x+.72,y-.55,z+.05,0,0,0,g);
+}
+
+function gutter(g,x,y,z,side=1){
+  box(.12,4.7,.12,pipeMat,x,y,z,0,0,0,g);
+  box(.9,.10,.10,pipeMat,x-side*.42,y+2.25,z,0,0,0,g);
+}
+
+function doorDetail(g,x,y,z){
+  box(1.18,2.2,.16,woodMat,x,y,z);
+  box(.08,2.25,.20,windowFrame,x-.61,y,z);
+  box(.08,2.25,.20,windowFrame,x+.61,y,z);
+  box(.08,.08,.25,yellowMat,x+.38,y,z-.15);
+  box(.95,.55,.10,darkGlass,x,y+.55,z-.09);
+}
+
+function porchFurniture(g,x,z){
+  box(2.1,.12,.9,woodMat,x,.95,z);
+  box(.10,.85,.10,woodMat,x-.85,.48,z);
+  box(.10,.85,.10,woodMat,x+.85,.48,z);
+  box(1.5,.10,.10,woodMat,x,.42,z);
+}
+
+function trashBags(g,x,z){
+  for(let i=0;i<3;i++){
+    const bag=new THREE.Mesh(new THREE.SphereGeometry(.28,10,8),dirtMat);
+    bag.scale.y=1.25; bag.position.set(x+(i-1)*.38,.32,z+(i%2)*.16); bag.castShadow=true; g.add(bag);
+  }
+}
+
+function shopSign(g,x,y,z,textWidth=4){
+  box(textWidth,.72,.10,neonOff,x,y,z);
+  box(textWidth+.08,.08,.14,windowFrame,x,y+.40,z);
+  box(textWidth+.08,.08,.14,windowFrame,x,y-.40,z);
+}
+
+function storefrontInterior(g,x,z){
+  // Visible shelving/product silhouettes behind the glass.
+  for(let sx=-4;sx<=4;sx+=2){
+    box(.08,2.0,.45,windowFrame,sx,1.65,z);
+    for(let sy=1;sy<=3;sy++) box(.9,.10,.36,paperMat,sx,sy*.52,z-.18);
+  }
+  box(2.2,1.4,.45,woodMat,0,.9,z-.20);
+}
+
+function utilityClutter(g,x,z){
+  box(2.1,.45,.55,dirtMat,x,.28,z);
+  box(.7,.18,.7,rustMat,x+.8,.55,z+.25);
+  box(1.1,.10,.12,pipeMat,x-.4,.63,z-.35,0,0,.2);
+}
+
+function detailHouse(x,z,variant=0){
+  const g=house(x,z,variant);
+  const w=9+variant*1.2,d=8;
+  trimWindow(g,-w*.28,2.7,-d/2,1.75,1.45);
+  trimWindow(g,w*.28,2.7,-d/2,1.75,1.45);
+  doorDetail(g,0,1.32,-d/2-.12);
+  gutter(g,-w/2-.28,2.55,-d/2-.02,-1);
+  gutter(g,w/2+.28,2.55,-d/2-.02,1);
+  wallAC(g,w/2+.40,2.0,-1.0);
+  porchFurniture(g,0,-d/2-.78);
+  trashBags(g,w/2+.9,-d/2+.3);
+  box(1.4,.08,.22,dirtMat,-w*.42,.42,-d/2-.72);
+  return g;
+}
+
+function detailShop(x,z,brick=false){
+  const g=shop(x,z,brick);
+  trimWindow(g,-4.0,2.6,-5.20,1.75,2.4);
+  trimWindow(g,4.0,2.6,-5.20,1.75,2.4);
+  storefrontInterior(g,0,-5.30);
+  shopSign(g,0,4.65,-5.32,4.2);
+  wallAC(g,6.9,4.1,-3.0);
+  gutter(g,-7.15,2.7,3.5,-1); gutter(g,7.15,2.7,3.5,1);
+  utilityClutter(g,7.8,5.4);
+  return g;
+}
+
+function detailWarehouse(x,z){
+  const g=warehouse(x,z);
+  trimWindow(g,-7.0,5.4,-7.18,2.2,1.4);
+  trimWindow(g,7.0,5.4,-7.18,2.2,1.4);
+  box(7.0,4.8,.18,darkGlass,0,3.25,-7.25);
+  for(let i=-2;i<=2;i++) box(.12,4.8,.20,windowFrame,i*1.35,3.25,-7.38);
+  for(let i=0;i<7;i++) box(.65,.10,.45,woodMat,-4.5+i*1.5,1.1,7.18);
+  for(let i=0;i<5;i++) box(.45,.65,.45,rustMat,-5+i*2.5,.42,7.0);
+  wallAC(g,-8.2,5.8,2.0); wallAC(g,8.2,5.8,2.0);
+  return g;
+}
+
+function addStreetLife(){
+  // Sidewalk clutter, fences, mailboxes, hydrants, weeds and small repair patches.
+  for(let i=-3;i<=3;i++){
+    for(let j=-3;j<=3;j++){
+      const bx=i*54, bz=j*54;
+      for(let k=0;k<4;k++){
+        const x=bx-22+k*14, z=bz-26;
+        box(3.0,.035,.12,asphaltPatch,x,.10,z);
+      }
+      if((i+j)%2===0){
+        box(.10,1.0,.10,windowFrame,bx-21,.55,bz+18);
+        box(.10,1.0,.10,windowFrame,bx-18,.55,bz+18);
+        box(3.0,.06,.06,windowFrame,bx-19.5,1.0,bz+18);
+      }
+      for(let k=0;k<5;k++){
+        const wx=bx-20+k*10, wz=bz+22;
+        const weed=new THREE.Mesh(new THREE.ConeGeometry(.12,.5,5),greenMat);
+        weed.position.set(wx,.25,wz); weed.rotation.z=(k%2-.5)*.35; city.add(weed);
+      }
+    }
+  }
+}
+
+
 function buildFallbackCity(){
   // Continuous road/city grid.
   for(let ix=-3;ix<=3;ix++) for(let iz=-3;iz<=3;iz++) road(ix*54,iz*54);
   // Near field: enough geometry to prove the renderer works immediately.
-  house(-17,-12,0); house(-5,-12,1); house(8,-12,2);
-  house(-17,10,1); house(-5,10,0);
-  shop(11,9,false); shop(-18,21,true); warehouse(18,21);
+  detailHouse(-17,-12,0); detailHouse(-5,-12,1); detailHouse(8,-12,2);
+  detailHouse(-17,10,1); detailHouse(-5,10,0);
+  detailShop(11,9,false); detailShop(-18,21,true); detailWarehouse(18,21);
   for(let i=-3;i<=3;i++) { pole(i*54-23,-23); pole(i*54+23,23); }
   for(let i=0;i<12;i++) car(-22+(i%6)*8,-21+Math.floor(i/6)*42,(i%4)*Math.PI/2,i%3===0);
-  dumpster(17,-17); dumpster(-18,18);
+  dumpster(17,-17); dumpster(-18,18); addStreetLife();
+  detailHouse(26,-12,1); detailHouse(-29,-12,2);
+  detailShop(28,9,true); detailWarehouse(-28,21);
   // Distant massing keeps the city continuous rather than empty.
   for(let ix=-4;ix<=4;ix++) for(let iz=-4;iz<=4;iz++){
     if(Math.abs(ix)<=3 && Math.abs(iz)<=3) continue;
