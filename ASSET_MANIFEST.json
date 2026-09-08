@@ -1,0 +1,26 @@
+{
+  "version": "03",
+  "root_only": true,
+  "glb_assets": [
+    "ac_unit_01.glb",
+    "car_pickup_01.glb",
+    "car_sedan_01.glb",
+    "dumpster_01.glb",
+    "house_01.glb",
+    "house_02.glb",
+    "house_03.glb",
+    "motel_01.glb",
+    "store_laundromat.glb",
+    "store_pawn.glb",
+    "street_sign_01.glb",
+    "utility_pole_01.glb",
+    "warehouse_01.glb"
+  ],
+  "textures": [
+    "pbr_asphalt_basecolor.jpg",
+    "pbr_brick_basecolor.jpg",
+    "pbr_concrete_basecolor.jpg",
+    "pbr_rust_basecolor.jpg",
+    "pbr_siding_basecolor.jpg"
+  ]
+}
