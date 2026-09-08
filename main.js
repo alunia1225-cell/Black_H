@@ -25,13 +25,13 @@ out vec4 outColor;
 void main(){
  vec4 tex=texture(atlas,vUV);
  float lam=max(dot(normalize(vN),normalize(sunDir)),0.0);
- float hemi=.46+.54*lam;
+ float hemi=.68+.32*lam;
  vec3 c=tex.rgb*vTint.rgb*hemi;
  // Windows carry a warm emissive lift.
  float warm=smoothstep(.56,.8,tex.r)*vTint.a;
- c+=vec3(.10,.065,.025)*warm;
+ c+=vec3(.12,.075,.025)*warm;
  float fog=smoothstep(115.0,180.0,length(vW-cam));
- c=mix(c,vec3(.40,.43,.45),fog*.72);
+ c=mix(c,vec3(.48,.52,.54),fog*.45);
  outColor=vec4(c,1.0);
 }`;
 
@@ -120,7 +120,7 @@ for(let i=-5;i<=5;i++){addBox(i*1.0,.16,-5.9,.36,.012,1.2,"lane");addBox(i*1.0,.
  addBox(-5.9,.16,i*1.0,1.2,.012,.36,"lane");addBox(5.9,.16,i*1.0,1.2,.012,.36,"lane")}
 
 // Building generator.
-const buildingMats=["concrete_dirty","brick_red","brick_dark","stucco_warm","painted_concrete","stone_block","glass_blue","plaster_stain","graffiti_wall"];
+const buildingMats=["concrete_dirty","brick_red","stucco_warm","painted_concrete","brick_dark","stone_block"];
 const facadeTints=["#8d8a83","#6e7272","#565c60","#918477","#64676b","#7a7269"];
 let seed=92317,R=rand(seed);
 function building(x,z,w,d,h,style){
@@ -128,7 +128,7 @@ function building(x,z,w,d,h,style){
  addBox(x,h/2,z,w/2,h/2,d/2,mat,0,true);
  // floor bands and roof mechanical parapet
  for(let y=3.2;y<h-.8;y+=3.2)addBox(x,y,z,w/2+.02,.055,d/2+.02,"dark");
- addBox(x,h+.08,z,w/2+.12,.09,d/2+.12,"roof");
+ addBox(x,h+.08,z,w/2+.12,.09,d/2+.12,(style%2)?"roof_shingle":"roof_tar");
  // windows every facade module
  const cols=Math.max(2,Math.floor(w/2.6)), rows=Math.max(2,Math.floor((h-2)/3.0));
  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
@@ -136,19 +136,19 @@ function building(x,z,w,d,h,style){
    if(wy>h-.8)continue;
    const ww=Math.min(1.05,w/cols*.55);
    const on=((c*17+r*13+style*7)%7)<2;
-   addBox(wx,wy,z-d/2-.035,ww,.7,.025,on?(r%3===0?"glass_blue":"window"):"dark_glass",0,false);
-   addBox(wx,wy,z+d/2+.035,ww,.7,.025,on?(r%3===0?"glass_green":"window"):"dark_glass",0,false);
+   addBox(wx,wy,z-d/2-.035,ww,.7,.025,on?(style%3===0?"glass_blue":"window_dirty"):"dark",0,false);
+   addBox(wx,wy,z+d/2+.035,ww,.7,.025,on?(style%2?"glass_green":"window_dirty"):"dark",0,false);
  }
  const sideRows=Math.max(2,Math.floor((h-2)/3.0)), sideCols=Math.max(2,Math.floor(d/3.2));
  for(let r=0;r<sideRows;r++)for(let c=0;c<sideCols;c++){
   const wz=z-d/2+(c+.5)*d/sideCols,wy=2+r*3;
   if(wy>h-.8)continue;
-  addBox(x-w/2-.035,wy,wz,.025,.7,Math.min(1.05,d/sideCols*.55),r%2?"glass_green":"glass_blue");
-  addBox(x+w/2+.035,wy,wz,.025,.7,Math.min(1.05,d/sideCols*.55),r%2?"glass_blue":"window_dirty");
+  addBox(x-w/2-.035,wy,wz,.025,.7,Math.min(1.05,d/sideCols*.55),style%2?"glass_green":"glass_blue");
+  addBox(x+w/2+.035,wy,wz,.025,.7,Math.min(1.05,d/sideCols*.55),style%3?"window_dirty":"glass_blue");
  }
  // entrance + storefront
  addBox(x,1.15,z-d/2-.055,1.35,1.15,.08,"dark");
- addBox(x,1.15,z-d/2-.09,.82,.93,.025,"glass");
+ addBox(x,1.15,z-d/2-.09,.82,.93,.025,"dark_glass");
  if(style%3===0){addBox(x,3.3,z-d/2-.09,2.3,.18,.08,"sign_red");}
  if(style%4===0){addBox(x+.9,h+.55,z,.55,.48,.55,"metal");addBox(x-.9,h+.35,z+.8,.4,.28,.4,"metal");}
 }
@@ -249,60 +249,30 @@ gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,stride*4
 gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,2,gl.FLOAT,false,stride*4,24);
 gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,stride*4,32);
 
-// Camera + controls.
+// Mobile-only FPS controls. No keyboard, mouse or pointer-lock path exists in this build.
 const player={x:0,y:1.72,z:31,yaw:0,pitch:0};
-const keys={}, stick={active:false,id:null,x:0,y:0}, look={active:false,id:null,x:0,y:0};
-let running=false, locked=false;
-
-const stickEl=document.getElementById("stick"),knob=document.getElementById("knob"),runBtn=document.getElementById("runBtn");
+const stickEl=document.getElementById("stick"),knob=document.getElementById("knob");
+const lookEl=document.getElementById("lookSurface"),runBtn=document.getElementById("runBtn"),startEl=document.getElementById("start"),enterBtn=document.getElementById("enter");
+const stick={active:false,id:null,x:0,y:0},look={active:false,id:null,x:0,y:0};
+let running=false;
 function stickSet(t){
  const r=stickEl.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;
  let dx=t.clientX-cx,dy=t.clientY-cy,m=Math.hypot(dx,dy)||1,max=34,k=Math.min(1,max/m);
  dx*=k;dy*=k;knob.style.transform=`translate(${dx}px,${dy}px)`;stick.x=dx/max;stick.y=dy/max;
 }
-stickEl.addEventListener("touchstart",e=>{e.preventDefault();e.stopPropagation();const t=e.changedTouches[0];stick.active=true;stick.id=t.identifier;stickSet(t)},{passive:false});
-stickEl.addEventListener("touchmove",e=>{e.preventDefault();e.stopPropagation();for(const t of e.changedTouches)if(t.identifier===stick.id)stickSet(t)},{passive:false});
-stickEl.addEventListener("pointerdown",e=>{if(e.pointerType==="touch")return;e.preventDefault();stick.active=true;stick.id=e.pointerId;stickSet(e);stickEl.setPointerCapture?.(e.pointerId)},{passive:false});
-stickEl.addEventListener("pointermove",e=>{if(!stick.active||e.pointerType==="touch")return;e.preventDefault();if(e.pointerId===stick.id)stickSet(e)},{passive:false});
-stickEl.addEventListener("pointerup",e=>{if(e.pointerType==="touch")return;if(e.pointerId===stick.id){stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"}},{passive:false});
-function endStick(e){for(const t of e.changedTouches)if(t.identifier===stick.id){stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"}}
+function endStick(e){for(const t of e.changedTouches||[])if(t.identifier===stick.id){stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"}}
+stickEl.addEventListener("touchstart",e=>{e.preventDefault();const t=e.changedTouches[0];if(stick.active)return;stick.active=true;stick.id=t.identifier;stickSet(t)},{passive:false});
+stickEl.addEventListener("touchmove",e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===stick.id)stickSet(t)},{passive:false});
 stickEl.addEventListener("touchend",endStick,{passive:false});stickEl.addEventListener("touchcancel",endStick,{passive:false});
+lookEl.addEventListener("touchstart",e=>{e.preventDefault();const t=[...e.changedTouches].find(q=>q.clientX>innerWidth*.32);if(!t||look.active)return;look.active=true;look.id=t.identifier;look.x=t.clientX;look.y=t.clientY},{passive:false});
+lookEl.addEventListener("touchmove",e=>{e.preventDefault();for(const t of e.changedTouches)if(look.active&&t.identifier===look.id){player.yaw-=(t.clientX-look.x)*.006;player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-(t.clientY-look.y)*.0048));look.x=t.clientX;look.y=t.clientY;}},{passive:false});
+function endLook(e){for(const t of e.changedTouches||[])if(look.active&&t.identifier===look.id){look.active=false;look.id=null}}
+lookEl.addEventListener("touchend",endLook,{passive:false});lookEl.addEventListener("touchcancel",endLook,{passive:false});
 runBtn.addEventListener("touchstart",e=>{e.preventDefault();running=true;runBtn.classList.add("pressed")},{passive:false});
-runBtn.addEventListener("touchend",e=>{e.preventDefault();running=false;runBtn.classList.remove("pressed")},{passive:false});
-runBtn.addEventListener("touchcancel",()=>{running=false;runBtn.classList.remove("pressed")},{passive:false});
-
-canvas.addEventListener("touchstart",e=>{
- for(const t of e.changedTouches){
-   if(t.clientX>innerWidth*.34&&!look.active){look.active=true;look.id=t.identifier;look.x=t.clientX;look.y=t.clientY}
- }
- e.preventDefault();
-},{passive:false});
-canvas.addEventListener("touchmove",e=>{
- for(const t of e.changedTouches)if(look.active&&t.identifier===look.id){
-   player.yaw-= (t.clientX-look.x)*.006;
-   player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-(t.clientY-look.y)*.0048));
-   look.x=t.clientX;look.y=t.clientY;
- }
- e.preventDefault();
-},{passive:false});
-canvas.addEventListener("pointerdown",e=>{
- if(e.pointerType==="touch")return;
- if(e.clientX>innerWidth*.34){look.active=true;look.id=e.pointerId;look.x=e.clientX;look.y=e.clientY;canvas.setPointerCapture?.(e.pointerId)}
-},{passive:false});
-canvas.addEventListener("pointermove",e=>{
- if(e.pointerType==="touch"||!look.active||e.pointerId!==look.id)return;
- player.yaw-=(e.clientX-look.x)*.004;
- player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-(e.clientY-look.y)*.003));
- look.x=e.clientX;look.y=e.clientY;
-},{passive:false});
-canvas.addEventListener("pointerup",e=>{if(e.pointerType!=="touch"&&look.id===e.pointerId){look.active=false;look.id=null}},{passive:false});
-function endLook(e){for(const t of e.changedTouches)if(look.active&&t.identifier===look.id){look.active=false;look.id=null}}
-canvas.addEventListener("touchend",endLook,{passive:false});canvas.addEventListener("touchcancel",endLook,{passive:false});
-
-function enterCity(e){if(e){e.preventDefault();e.stopPropagation()}const startEl=document.getElementById("start");if(startEl)startEl.style.display="none";}
-const enterBtn=document.getElementById("enter");
-enterBtn.addEventListener("click",enterCity);
-enterBtn.addEventListener("touchend",enterCity,{passive:false});
+function endRun(e){e.preventDefault();running=false;runBtn.classList.remove("pressed")}
+runBtn.addEventListener("touchend",endRun,{passive:false});runBtn.addEventListener("touchcancel",endRun,{passive:false});
+enterBtn.addEventListener("touchend",e=>{e.preventDefault();startEl.style.display="none"},{passive:false});
+enterBtn.addEventListener("click",()=>{startEl.style.display="none"});
 addEventListener("contextmenu",e=>e.preventDefault());
 for(const n of ["gesturestart","gesturechange","gestureend"])addEventListener(n,e=>e.preventDefault(),{passive:false});
 
@@ -314,7 +284,7 @@ function blocked(nx,nz){
  return Math.abs(nx)>106||Math.abs(nz)>106;
 }
 function update(dt){
- let f=-stick.y,s=stick.x;
+ let f=0,s=0;
  if(stick.active||stick.x||stick.y){s=stick.x;f=-stick.y}
  const len=Math.hypot(f,s);if(len>1){f/=len;s/=len}
  const speed=running?8.2:4.5;
@@ -350,7 +320,7 @@ function resize(){
 }
 addEventListener("resize",resize);resize();
 gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
-gl.clearColor(.34,.38,.40,1);
+gl.clearColor(.55,.62,.65,1);
 
 let last=performance.now(),fps=60,frames=0,ft=last;
 function render(){
