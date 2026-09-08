@@ -402,3 +402,236 @@ function loop(now){
 }
 requestAnimationFrame(loop);
 })();
+
+
+// BLACK_HARVEST_FPS_TOUCH_V6
+// Mobile FPS controls:
+// left virtual analog stick = movement, right touch area = camera yaw + pitch.
+(function setupMobileFPSControls(){
+  const stick = document.querySelector('#stick');
+  const knob = document.querySelector('#knob');
+  const canvas = document.querySelector('#game');
+  if(!stick || !knob) return;
+
+  let moveId=null, lookId=null;
+  let mx=0,my=0;
+  let lx=0,ly=0;
+  let lastX=0,lastY=0;
+  const dead=0.10;
+
+  function setKnob(dx,dy){
+    const rect=stick.getBoundingClientRect();
+    const max=Math.max(20, rect.width*0.30);
+    const len=Math.hypot(dx,dy);
+    if(len>max){ dx=dx/len*max; dy=dy/len*max; }
+    knob.style.transform=`translate(${dx}px,${dy}px)`;
+    mx=dx/max; my=dy/max;
+    if(Math.hypot(mx,my)<dead) mx=my=0;
+  }
+  function resetMove(){
+    moveId=null; mx=0; my=0;
+    knob.style.transform='translate(-50%,-50%)';
+  }
+
+  stick.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    moveId=e.pointerId;
+    stick.setPointerCapture(e.pointerId);
+    const r=stick.getBoundingClientRect();
+    setKnob(e.clientX-(r.left+r.width/2), e.clientY-(r.top+r.height/2));
+  },{passive:false});
+
+  stick.addEventListener('pointermove',e=>{
+    if(e.pointerId!==moveId)return;
+    e.preventDefault();
+    const r=stick.getBoundingClientRect();
+    setKnob(e.clientX-(r.left+r.width/2), e.clientY-(r.top+r.height/2));
+  },{passive:false});
+
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>{
+    stick.addEventListener(ev,e=>{if(moveId===e.pointerId||ev==='lostpointercapture')resetMove();},{passive:false});
+  });
+
+  // Full right half is the camera-look surface.
+  const lookSurface=document.createElement('div');
+  lookSurface.id='fpsLookSurface';
+  document.body.appendChild(lookSurface);
+
+  lookSurface.addEventListener('pointerdown',e=>{
+    if(e.clientX < innerWidth*0.48) return;
+    e.preventDefault();
+    lookId=e.pointerId;
+    lookSurface.setPointerCapture(e.pointerId);
+    lastX=e.clientX; lastY=e.clientY;
+  },{passive:false});
+
+  lookSurface.addEventListener('pointermove',e=>{
+    if(e.pointerId!==lookId)return;
+    e.preventDefault();
+    const dx=e.clientX-lastX, dy=e.clientY-lastY;
+    lastX=e.clientX; lastY=e.clientY;
+    // Feed the existing camera variables if present.
+    if(typeof yaw!=='undefined') yaw -= dx*0.0065;
+    if(typeof pitch!=='undefined'){
+      pitch -= dy*0.0055;
+      pitch=Math.max(-1.25,Math.min(1.25,pitch));
+    }
+    // Common alternate variable names.
+    if(typeof camYaw!=='undefined') camYaw -= dx*0.0065;
+    if(typeof camPitch!=='undefined'){
+      camPitch -= dy*0.0055;
+      camPitch=Math.max(-1.25,Math.min(1.25,camPitch));
+    }
+  },{passive:false});
+
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>{
+    lookSurface.addEventListener(ev,e=>{if(lookId===e.pointerId||ev==='lostpointercapture')lookId=null;},{passive:false});
+  });
+
+  // Expose movement state for the frame loop to consume.
+  window.blackHarvestFPSInput={getMove:()=>({x:mx,y:my})};
+})();
+
+
+// Legacy input bridge retained for compatibility; final FPS controller owns movement.
+(function(){
+  const oldRAF=window.requestAnimationFrame;
+  // Input values are exposed globally; existing movement can consume them.
+  // If the source already has vx/vz or player movement variables, map the analog vector.
+  setInterval(()=>{
+    const s=window.blackHarvestFPSInput;
+    if(!s)return;
+    const v=s.getMove();
+    window.blackHarvestMoveX=v.x;
+    window.blackHarvestMoveY=v.y;
+  },16);
+})();
+
+
+// BLACK_HARVEST_FPS_CONTROLLER_FINAL
+(function(){
+  const state={
+    x:0, y:1.72, z:0,
+    yaw:0, pitch:0,
+    walk:4.2, run:7.2,
+    moveX:0, moveY:0, runHeld:false,
+    initialized:false
+  };
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+  function setup(){
+    const stick=document.querySelector('#stick'), knob=document.querySelector('#knob');
+    const run=document.querySelector('#run');
+    if(!stick||!knob) return;
+    let id=null;
+    const radius=()=>Math.max(28,stick.getBoundingClientRect().width*.30);
+    function set(e){
+      const r=stick.getBoundingClientRect();
+      let dx=e.clientX-(r.left+r.width/2), dy=e.clientY-(r.top+r.height/2);
+      const R=radius(), l=Math.hypot(dx,dy);
+      if(l>R){dx=dx/l*R;dy=dy/l*R;}
+      knob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      const dead=.10, x=dx/R, y=dy/R;
+      state.moveX=Math.abs(x)<dead?0:x;
+      state.moveY=Math.abs(y)<dead?0:y;
+    }
+    stick.onpointerdown=e=>{e.preventDefault();id=e.pointerId;stick.setPointerCapture(id);set(e);}
+    stick.onpointermove=e=>{if(e.pointerId===id){e.preventDefault();set(e);}}
+    stick.onpointerup=stick.onpointercancel=()=>{id=null;state.moveX=state.moveY=0;knob.style.transform='translate(-50%,-50%)';};
+    if(run){
+      run.onpointerdown=e=>{e.preventDefault();state.runHeld=true;}
+      run.onpointerup=run.onpointercancel=run.onpointerleave=()=>state.runHeld=false;
+    }
+
+    const look=document.querySelector('#fpsLookSurface');
+    if(look){
+      let lid=null,lx=0,ly=0;
+      look.onpointerdown=e=>{
+        if(e.clientX<innerWidth*.44)return;
+        e.preventDefault();lid=e.pointerId;look.setPointerCapture(lid);lx=e.clientX;ly=e.clientY;
+      };
+      look.onpointermove=e=>{
+        if(e.pointerId!==lid)return;
+        e.preventDefault();
+        const dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;
+        state.yaw-=dx*.006; state.pitch=clamp(state.pitch-dy*.0045,-1.25,1.25);
+      };
+      look.onpointerup=look.onpointercancel=()=>lid=null;
+    }
+    state.initialized=true;
+  }
+
+  // Ray-box collision against the existing global collision list when available.
+  function blocked(nx,nz){
+    const list=window.collisionBoxes||window.colliders||window.COLLIDERS;
+    if(!Array.isArray(list)) return false;
+    const r=.34;
+    for(const b of list){
+      if(!b)continue;
+      const minX=b.minX??b.x1??(b.x-b.w/2), maxX=b.maxX??b.x2??(b.x+b.w/2);
+      const minZ=b.minZ??b.z1??(b.z-b.d/2), maxZ=b.maxZ??b.z2??(b.z+b.d/2);
+      if(nx+r>minX&&nx-r<maxX&&nz+r>minZ&&nz-r<maxZ)return true;
+    }
+    return false;
+  }
+
+  function tick(dt){
+    if(!state.initialized)setup();
+    const len=Math.hypot(state.moveX,state.moveY);
+    if(len<.001)return;
+    const mx=state.moveX, mz=state.moveY;
+    const speed=(state.runHeld?state.run:state.walk)*Math.min(1,len);
+    const fx=-Math.sin(state.yaw), fz=-Math.cos(state.yaw);
+    const rx=Math.cos(state.yaw), rz=-Math.sin(state.yaw);
+    const dx=(rx*mx + fx*(-mz))*speed*dt;
+    const dz=(rz*mx + fz*(-mz))*speed*dt;
+    const nx=state.x+dx,nz=state.z+dz;
+    if(!blocked(nx,state.z))state.x=nx;
+    if(!blocked(state.x,nz))state.z=nz;
+  }
+
+  // Export stable state for renderer integration.
+  window.blackHarvestFPS={
+    state,
+    tick,
+    getCamera(){return {x:state.x,y:state.y,z:state.z,yaw:state.yaw,pitch:state.pitch};}
+  };
+
+  // Integrate with whichever loop the current prototype exposes.
+  function integrate(){
+    const candidates=['render','frame','update','loop','animate','draw'];
+    for(const n of candidates){
+      const fn=window[n];
+      if(typeof fn!=='function'||fn.__bhfps)return;
+      const wrapped=function(...args){
+        const now=performance.now();
+        const last=wrapped._last??now;
+        const dt=Math.min(.05,(now-last)/1000); wrapped._last=now;
+        state.tick(dt);
+        return fn.apply(this,args);
+      };
+      wrapped.__bhfps=true; wrapped._last=performance.now();
+      window[n]=wrapped;
+      return true;
+    }
+    return false;
+  }
+
+  // Patch camera/view matrices by exposing a canonical camera object. If the renderer uses
+  // common globals, mirror them so the generated city becomes a true first-person view.
+  setInterval(()=>{
+    if(!state.initialized)setup();
+    window.bhCamera=window.blackHarvestFPS.getCamera();
+    if('camX' in window)window.camX=state.x;
+    if('camY' in window)window.camY=state.y;
+    if('camZ' in window)window.camZ=state.z;
+    if('cameraX' in window)window.cameraX=state.x;
+    if('cameraY' in window)window.cameraY=state.y;
+    if('cameraZ' in window)window.cameraZ=state.z;
+    if('yaw' in window)window.yaw=state.yaw;
+    if('pitch' in window)window.pitch=state.pitch;
+  },16);
+
+  setup();
+  integrate();
+})();

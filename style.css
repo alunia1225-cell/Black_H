@@ -5,3 +5,37 @@
 
 /* urban detail pass */
 #hud{font-size:12px}
+
+/* BLACK_HARVEST_FPS_TOUCH_V6 */
+#stick{
+  touch-action:none !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+}
+#knob{
+  touch-action:none !important;
+  user-select:none !important;
+  -webkit-user-select:none !important;
+}
+#fpsLookSurface{
+  position:fixed;
+  z-index:8;
+  left:48%;
+  top:0;
+  right:0;
+  bottom:0;
+  background:transparent;
+  touch-action:none !important;
+  pointer-events:auto;
+  user-select:none;
+  -webkit-user-select:none;
+}
+#stick,#run,#hud,#start{
+  z-index:20;
+}
+@media (max-width:900px){
+  #fpsLookSurface{left:44%;}
+}
+
+/* Final FPS input layer */
+#fpsLookSurface{z-index:8;pointer-events:auto;touch-action:none!important} #stick,#run{z-index:30;pointer-events:auto}
