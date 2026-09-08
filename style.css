@@ -41,3 +41,12 @@
 #fpsLookSurface{z-index:8;pointer-events:auto;touch-action:none!important} #stick,#run{z-index:30;pointer-events:auto}
 
 #mobile{z-index:30}#stick,#runBtn{touch-action:none!important}#game{touch-action:none!important;cursor:crosshair}#knob{left:50%;top:50%;transform:translate(-50%,-50%)}
+
+/* Canonical mobile FPS look surface. It receives all right-side swipe events,
+   independent of the WebGL canvas and the HUD. */
+#lookSurface{position:fixed;z-index:10;left:43%;right:0;top:0;bottom:0;background:transparent;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
+#mobile{z-index:30;}
+#stick,#runBtn{position:absolute;z-index:31;}
+#hud,#crosshair,#lookHint{z-index:20;pointer-events:none;}
+#start{z-index:100;}
+@media(min-width:800px){#lookSurface{display:none;}}

@@ -27,11 +27,11 @@ out vec4 outColor;
 void main(){
  vec4 tex=texture(atlas,vUV);
  float lam=max(dot(normalize(vN),normalize(sunDir)),0.0);
- float hemi=(.60+.40*lam)*(.68+.32*dayFactor);
+ float hemi=(.16+.84*lam)*(.30+.70*dayFactor);
  vec3 c=tex.rgb*vTint.rgb*hemi;
  // Windows carry a warm emissive lift.
- float warm=smoothstep(.56,.8,tex.r)*vTint.a;
- c+=vec3(.10,.065,.025)*warm*(0.55+0.9*nightFactor);
+ float emissiveMask=vTint.a;
+ c+=vec3(1.0,.55,.16)*emissiveMask*nightFactor*1.15;
  float fog=smoothstep(115.0,180.0,length(vW-cam));
  vec3 sky=mix(vec3(.48,.52,.56),vec3(.055,.065,.085),nightFactor);
  c=mix(c,sky,fog*.52);
@@ -44,16 +44,40 @@ if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog
 gl.useProgram(prog);
 const vpLoc=gl.getUniformLocation(prog,"vp"), sunLoc=gl.getUniformLocation(prog,"sunDir"), camLoc=gl.getUniformLocation(prog,"cam"), dayLoc=gl.getUniformLocation(prog,"dayFactor"), nightLoc=gl.getUniformLocation(prog,"nightFactor");
 
-const atlas=new Image(); atlas.src="city_atlas.png";
+const atlas=new Image();
+atlas.src="city_atlas.png";
 let texture=null,ready=false;
-atlas.onload=()=>{texture=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,texture);gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,atlas);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.generateMipmap(gl.TEXTURE_2D);ready=true};
+atlas.onload=()=>{
+  texture=gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D,texture);
+  // Keep image coordinates predictable: the atlas is authored top-to-bottom.
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,atlas);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  ready=true;
+};
+atlas.onerror=()=>{console.error("city_atlas.png could not be loaded");};
 
-const OV=512/896; const A={
-concrete:[0,0,.25,OV*.25],brick:[.25,0,.5,OV*.25],glass:[.5,0,.75,OV*.25],window:[.75,0,1,OV*.25],
-asphalt:[0,OV*.25,.25,OV*.5],sidewalk:[.25,OV*.25,.5,OV*.5],roof:[.5,OV*.25,.75,OV*.5],dark:[.75,OV*.25,1,OV*.5],
-metal:[0,OV*.5,.25,OV*.75],grass:[.25,OV*.5,.5,OV*.75],sign_red:[.5,OV*.5,.75,OV*.75],sign_blue:[.75,OV*.5,1,OV*.75],
-lane:[0,OV*.75,.25,OV],light:[.25,OV*.75,.5,OV],wood:[.5,OV*.75,.75,OV],leaf:[.75,OV*.75,1,OV]};
-for(let i=0;i<48;i++){const col=i%8,row=Math.floor(i/8),u0=col/8,u1=(col+1)/8,v0=(512+row*64)/896,v1=(512+(row+1)*64)/896;A['real'+i]=[u0,v0,u1,v1];}
+// Atlas is 512 x 896. Coordinates below use the image's top-left origin and
+// are converted to WebGL UVs so added tiles do not distort the old materials.
+const ATW=512,ATH=896;
+function tile(x,y,w=128,h=128){
+  return [x/ATW,1-(y+h)/ATH,(x+w)/ATW,1-y/ATH];
+}
+const A={
+ concrete:tile(0,0),brick:tile(128,0),glass:tile(256,0),window:tile(384,0),
+ asphalt:tile(0,128),sidewalk:tile(128,128),roof:tile(256,128),dark:tile(384,128),
+ metal:tile(0,256),grass:tile(128,256),sign_red:tile(256,256),sign_blue:tile(384,256),
+ lane:tile(0,384),light:tile(128,384),wood:tile(256,384),leaf:tile(384,384)
+};
+for(let i=0;i<48;i++){
+  const col=i%8,row=Math.floor(i/8);
+  A['real'+i]=tile(col*64,512+row*64,64,64);
+}
 const REAL={
  brick_red:'real0',brick_dark:'real1',plaster_cream:'real2',plaster_old:'real3',concrete_light:'real4',concrete_stain:'real5',
  metal_panel:'real6',metal_rust:'real7',tile_blue:'real8',tile_green:'real9',stone:'real10',wood_dark:'real11',shutter:'real12',
@@ -77,12 +101,15 @@ const UV=[];
 function face(a,b,c,d,n,uv,tint){
  const [u0,v0,u1,v1]=uv;
  const vs=[a,b,c,a,c,d], us=[[u0,v0],[u1,v0],[u1,v1],[u0,v0],[u1,v1],[u0,v1]];
- for(let i=0;i<6;i++){P.push(...vs[i]);C.push(...n);UV.push(us[i][0],us[i][1]);COL.push(...tint,1)}
+ for(let i=0;i<6;i++){P.push(...vs[i]);C.push(...n);UV.push(us[i][0],us[i][1]);COL.push(tint[0],tint[1],tint[2],tint[3] ?? 0)}
 }
 function addBox(x,y,z,sx,sy,sz,material="#ffffff",yaw=0,solid=false){
+ const sourceMaterial=material;
  if(typeof material==="string" && REAL[material]) material=REAL[material];
- let t=A[material]||A.concrete, tint=material==="#ffffff"?[1,1,1]:rgb(material);
+ let t=A[material]||A.concrete, tint=material==="#ffffff"?[1,1,1,0]:[...rgb(material),0];
  if(Array.isArray(material)){t=A[material[0]]||A.concrete;tint=material[1]}
+ if(typeof sourceMaterial==='string' && /^(window_lit|light)$/.test(sourceMaterial)) tint=[1,1,1,1];
+ if(typeof sourceMaterial==='string' && sourceMaterial==='neon_base') tint=[1,1,1,.8];
  const [c,s]=[Math.cos(yaw),Math.sin(yaw)];
  const local=[
   [-sx,-sy,sz],[sx,-sy,sz],[sx,sy,sz],[-sx,sy,sz],
@@ -308,106 +335,190 @@ gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,3,gl.FLOAT,false,stride*4
 gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,2,gl.FLOAT,false,stride*4,24);
 gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,stride*4,32);
 
-// Camera + controls.
-const player={x:0,y:1.72,z:31,yaw:0,pitch:0};
-const keys={}, stick={active:false,id:null,x:0,y:0}, look={active:false,id:null,x:0,y:0};
-let running=false, locked=false;
-addEventListener("keydown",e=>{keys[e.code]=true});
-addEventListener("keyup",e=>{keys[e.code]=false});
-document.addEventListener("pointerlockchange",()=>locked=document.pointerLockElement===canvas);
-document.addEventListener("mousemove",e=>{if(!locked)return;player.yaw-=e.movementX*.0022;player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-e.movementY*.0018))});
+// FPS PLAYER / CONTROLS -----------------------------------------------------
+// One canonical player state drives BOTH movement and camera. There are no
+// secondary camera/player variables, so mobile and desktop input end up in the
+// exact same update path.
+const player={x:0,y:1.72,z:2.0,yaw:0,pitch:0};
+const keys=Object.create(null);
+const stick={active:false,id:null,x:0,y:0};
+const look={active:false,id:null,x:0,y:0};
+let running=false, started=false;
 
-const stickEl=document.getElementById("stick"),knob=document.getElementById("knob"),runBtn=document.getElementById("runBtn");
-function stickSet(x,y){const r=stickEl.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=x-cx,dy=y-cy,m=Math.hypot(dx,dy)||1,max=Math.max(28,r.width*.30),k=Math.min(1,max/m);dx*=k;dy*=k;knob.style.transform=`translate(${dx}px,${dy}px)`;stick.x=dx/max;stick.y=dy/max;}
-stickEl.style.touchAction="none";
-stickEl.addEventListener("pointerdown",e=>{e.preventDefault();stick.active=true;stick.id=e.pointerId;stickEl.setPointerCapture(e.pointerId);stickSet(e.clientX,e.clientY)},{passive:false});
-stickEl.addEventListener("pointermove",e=>{if(e.pointerId===stick.id){e.preventDefault();stickSet(e.clientX,e.clientY)}},{passive:false});
-function endStick(e){if(e.pointerId===stick.id){stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"}}
-stickEl.addEventListener("pointerup",endStick,{passive:false});stickEl.addEventListener("pointercancel",endStick,{passive:false});stickEl.addEventListener("lostpointercapture",e=>{stick.active=false;stick.id=null;stick.x=stick.y=0;knob.style.transform="translate(0,0)"});
-runBtn.addEventListener("pointerdown",e=>{e.preventDefault();running=true;runBtn.classList.add("pressed");runBtn.setPointerCapture(e.pointerId)},{passive:false});
-runBtn.addEventListener("pointerup",e=>{e.preventDefault();running=false;runBtn.classList.remove("pressed")},{passive:false});runBtn.addEventListener("pointercancel",()=>{running=false;runBtn.classList.remove("pressed")});
-canvas.addEventListener("pointerdown",e=>{if(e.pointerType!=="mouse" && e.clientX>innerWidth*.42&&!look.active){look.active=true;look.id=e.pointerId;look.x=e.clientX;look.y=e.clientY;canvas.setPointerCapture(e.pointerId);}},{passive:false});
-canvas.addEventListener("pointermove",e=>{if(look.active&&e.pointerId===look.id){e.preventDefault();player.yaw-=(e.clientX-look.x)*.006;player.pitch=Math.max(-1.42,Math.min(1.42,player.pitch-(e.clientY-look.y)*.0048));look.x=e.clientX;look.y=e.clientY;}},{passive:false});
-canvas.addEventListener("pointerup",e=>{if(e.pointerId===look.id){look.active=false;look.id=null;}},{passive:false});canvas.addEventListener("pointercancel",e=>{if(e.pointerId===look.id){look.active=false;look.id=null;}},{passive:false});
-canvas.addEventListener("click",()=>{if(matchMedia("(pointer:fine)").matches)canvas.requestPointerLock()});
+addEventListener('keydown',e=>{keys[e.code]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();});
+addEventListener('keyup',e=>{keys[e.code]=false;});
 
-document.getElementById("enter").onclick=()=>{
- document.getElementById("start").style.display="none";
- if(matchMedia("(pointer:fine)").matches)canvas.requestPointerLock();
-};
-addEventListener("contextmenu",e=>e.preventDefault());
-for(const n of ["gesturestart","gesturechange","gestureend"])addEventListener(n,e=>e.preventDefault(),{passive:false});
+const stickEl=document.getElementById('stick');
+const knob=document.getElementById('knob');
+const runBtn=document.getElementById('runBtn');
+const lookSurface=document.getElementById('lookSurface');
 
-function blocked(nx,nz){
- const r=.48;
+function setKnob(dx,dy){knob.style.transform=`translate(${dx}px,${dy}px)`;}
+function stickSet(clientX,clientY){
+ const r=stickEl.getBoundingClientRect();
+ const cx=r.left+r.width*.5, cy=r.top+r.height*.5;
+ let dx=clientX-cx,dy=clientY-cy;
+ const max=Math.max(24,r.width*.31),m=Math.hypot(dx,dy)||1;
+ if(m>max){const q=max/m;dx*=q;dy*=q;}
+ setKnob(dx,dy);
+ stick.x=Math.max(-1,Math.min(1,dx/max));
+ stick.y=Math.max(-1,Math.min(1,dy/max));
+}
+function resetStick(){stick.active=false;stick.id=null;stick.x=0;stick.y=0;setKnob(0,0);}
+
+stickEl.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();stick.active=true;stick.id=e.pointerId;stickEl.setPointerCapture(e.pointerId);stickSet(e.clientX,e.clientY);},{passive:false});
+stickEl.addEventListener('pointermove',e=>{if(e.pointerId===stick.id){e.preventDefault();stickSet(e.clientX,e.clientY)}},{passive:false});
+for(const ev of ['pointerup','pointercancel','lostpointercapture'])stickEl.addEventListener(ev,resetStick,{passive:false});
+
+runBtn.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();running=true;runBtn.classList.add('pressed');},{passive:false});
+for(const ev of ['pointerup','pointercancel','pointerleave'])runBtn.addEventListener(ev,e=>{running=false;runBtn.classList.remove('pressed')},{passive:false});
+
+function beginLook(e){
+ if(!started || e.pointerType==='mouse')return;
+ e.preventDefault();
+ look.active=true;look.id=e.pointerId;look.x=e.clientX;look.y=e.clientY;
+ lookSurface.setPointerCapture?.(e.pointerId);
+}
+function moveLook(e){
+ if(!look.active || e.pointerId!==look.id)return;
+ e.preventDefault();
+ const dx=e.clientX-look.x,dy=e.clientY-look.y;
+ look.x=e.clientX;look.y=e.clientY;
+ player.yaw-=dx*.0050;
+ player.pitch=Math.max(-1.35,Math.min(1.35,player.pitch-dy*.0040));
+}
+function endLook(e){if(e.pointerId===look.id){look.active=false;look.id=null;}}
+lookSurface.addEventListener('pointerdown',beginLook,{passive:false});
+lookSurface.addEventListener('pointermove',moveLook,{passive:false});
+lookSurface.addEventListener('pointerup',endLook,{passive:false});
+lookSurface.addEventListener('pointercancel',endLook,{passive:false});
+
+// Desktop: click to capture the mouse and use true FPS mouse look.
+let pointerLocked=false;
+document.addEventListener('pointerlockchange',()=>{pointerLocked=document.pointerLockElement===canvas;});
+canvas.addEventListener('click',()=>{if(started && matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();});
+document.addEventListener('mousemove',e=>{
+ if(!pointerLocked)return;
+ player.yaw-=e.movementX*.0024;
+ player.pitch=Math.max(-1.35,Math.min(1.35,player.pitch-e.movementY*.0020));
+});
+
+document.getElementById('enter').addEventListener('click',()=>{
+ started=true;
+ document.getElementById('start').style.display='none';
+ if(matchMedia('(pointer:fine)').matches)canvas.requestPointerLock?.();
+});
+addEventListener('contextmenu',e=>e.preventDefault());
+for(const n of ['gesturestart','gesturechange','gestureend'])addEventListener(n,e=>e.preventDefault(),{passive:false});
+
+function collides(nx,nz){
+ const r=.42;
  for(const c of colliders){
+   // All city colliders are currently axis-aligned boxes; use their stored
+   // footprint and a small player radius. The yaw is kept for future detail.
    if(Math.abs(nx-c.x)<c.sx+r && Math.abs(nz-c.z)<c.sz+r)return true;
  }
  return Math.abs(nx)>142||Math.abs(nz)>142;
 }
 function update(dt){
- let f=(keys.KeyW?1:0)-(keys.KeyS?1:0),s=(keys.KeyD?1:0)-(keys.KeyA?1:0);
- if(stick.active||stick.x||stick.y){s=stick.x;f=-stick.y}
- const len=Math.hypot(f,s);if(len>1){f/=len;s/=len}
- const speed=(running||keys.ShiftLeft||keys.ShiftRight)?8.2:4.5;
+ let f=(keys.KeyW||keys.ArrowUp?1:0)-(keys.KeyS||keys.ArrowDown?1:0);
+ let str=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);
+ if(stick.active || Math.abs(stick.x)+Math.abs(stick.y)>.02){str=stick.x;f=-stick.y;}
+ const mag=Math.hypot(f,str);
+ if(mag>1){f/=mag;str/=mag;}
+ const speed=(running||keys.ShiftLeft||keys.ShiftRight)?8.4:4.6;
  const sy=Math.sin(player.yaw),cy=Math.cos(player.yaw);
- const dx=(sy*f+cy*s)*speed*dt,dz=(-cy*f+sy*s)*speed*dt;
- if(!blocked(player.x+dx,player.z))player.x+=dx;
- if(!blocked(player.x,player.z+dz))player.z+=dz;
+ const dx=(sy*f+cy*str)*speed*dt;
+ const dz=(-cy*f+sy*str)*speed*dt;
+ const nx=player.x+dx,nz=player.z+dz;
+ // Small stepwise collision lets the player slide along walls instead of
+ // getting stuck when both axes hit an obstacle.
+ if(!collides(nx,player.z))player.x=nx;
+ if(!collides(player.x,nz))player.z=nz;
 }
+
 function persp(fov,asp,n,f){
  const t=1/Math.tan(fov/2),m=new Float32Array(16);
- m[0]=t/asp;m[5]=t;m[10]=(f+n)/(n-f);m[11]=-1;m[14]=(2*f*n)/(n-f);return m;
+ m[0]=t/asp;m[5]=t;m[10]=(f+n)/(n-f);m[11]=-1;m[14]=(2*f*n)/(n-f);
+ return m;
 }
-function view(){
- const sy=Math.sin(player.yaw),cy=Math.cos(player.yaw),sp=Math.sin(player.pitch),cp=Math.cos(player.pitch);
- const fx=sy*cp,fy=sp,fz=-cy*cp,rx=cy,rz=sy,uy=-sy*sp,vy=cp,uz=cy*sp;
+function lookAtView(){
+ const yaw=player.yaw,pitch=player.pitch;
+ const sy=Math.sin(yaw),cy=Math.cos(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch);
+ // Right / up / forward basis, row-major basis packed into column-major WebGL matrix.
+ const fx=sy*cp,fy=sp,fz=-cy*cp;
+ const rx=cy,ry=0,rz=sy;
+ const ux=-sy*sp,uy=cp,uz=cy*sp;
  const m=new Float32Array(16);
- m[0]=rx;m[1]=uy;m[2]=-fx;m[3]=0;
- m[4]=0;m[5]=vy;m[6]=-fy;m[7]=0;
+ m[0]=rx;m[1]=ux;m[2]=-fx;m[3]=0;
+ m[4]=ry;m[5]=uy;m[6]=-fy;m[7]=0;
  m[8]=rz;m[9]=uz;m[10]=-fz;m[11]=0;m[15]=1;
- m[12]=-(rx*player.x+rz*player.z);
- m[13]=-(vy*player.y);
+ m[12]=-(rx*player.x+ry*player.y+rz*player.z);
+ m[13]=-(ux*player.x+uy*player.y+uz*player.z);
  m[14]=-((-fx)*player.x+(-fy)*player.y+(-fz)*player.z);
  return m;
 }
 function mul(a,b){
  const o=new Float32Array(16);
- for(let c=0;c<4;c++)for(let r=0;r<4;r++)o[c*4+r]=a[r]*b[c*4]+a[4+r]*b[c*4+1]+a[8+r]*b[c*4+2]+a[12+r]*b[c*4+3];
+ for(let c=0;c<4;c++)for(let r=0;r<4;r++){
+  o[c*4+r]=a[0*4+r]*b[c*4+0]+a[1*4+r]*b[c*4+1]+a[2*4+r]*b[c*4+2]+a[3*4+r]*b[c*4+3];
+ }
  return o;
 }
 function resize(){
- const d=Math.min(devicePixelRatio||1,1.5),w=Math.floor(innerWidth*d),h=Math.floor(innerHeight*d);
- if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h)}
+ const d=Math.min(devicePixelRatio||1,1.5),w=Math.max(1,Math.floor(innerWidth*d)),h=Math.max(1,Math.floor(innerHeight*d));
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}
 }
-addEventListener("resize",resize);resize();
-gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
-gl.clearColor(.34,.38,.40,1);
+addEventListener('resize',resize);resize();
+
+gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);
 
 let last=performance.now(),fps=60,frames=0,ft=last;
 let worldTime=12.0;
-const DAY_LENGTH=180.0;
+const DAY_LENGTH=180.0; // one full 24h cycle = 3 real minutes
 function timeLighting(t){
-  const ang=(t/24)*Math.PI*2-Math.PI/2;
-  const sun=Math.max(0,Math.sin(ang));
-  const night=1-Math.max(0,Math.min(1,(sun-.02)/.18));
-  return {sun,night};
+ const a=(t/24)*Math.PI*2-Math.PI/2;
+ const sun=Math.max(0,Math.sin(a));
+ const day=Math.max(.12,Math.min(1,sun));
+ const night=1-day;
+ const az=a-.35;
+ const sunDir=[Math.cos(az)*.72,Math.max(.08,sun),Math.sin(az)*.72];
+ return {sun,day,night,sunDir};
 }
-function formatWorldTime(t){let h=Math.floor(t)%24,m=Math.floor((t%1)*60);return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+function formatWorldTime(t){
+ const h=Math.floor(t)%24,m=Math.floor((t%1)*60);
+ return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
 
 function render(){
  if(!ready)return;
- const pv=mul(persp(Math.PI/3,canvas.width/canvas.height,.05,220),view());
+ const light=timeLighting(worldTime);
+ const pv=mul(persp(Math.PI/3,canvas.width/canvas.height,.05,220),lookAtView());
+ // Keep the sky itself synchronized with time-of-day.
+ const skyDay=[.46,.57,.68], skyNight=[.025,.035,.06];
+ const q=light.night;
+ gl.clearColor(
+  skyDay[0]*(1-q)+skyNight[0]*q,
+  skyDay[1]*(1-q)+skyNight[1]*q,
+  skyDay[2]*(1-q)+skyNight[2]*q,1
+ );
  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
  gl.useProgram(prog);gl.bindVertexArray(vao);
- gl.uniformMatrix4fv(vpLoc,false,pv);gl.uniform3f(sunLoc,-.42,.84,.36);gl.uniform3f(camLoc,player.x,player.y,player.z);
- gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);
+ gl.uniformMatrix4fv(vpLoc,false,pv);
+ gl.uniform3f(sunLoc,light.sunDir[0],light.sunDir[1],light.sunDir[2]);
+ gl.uniform3f(camLoc,player.x,player.y,player.z);
+ gl.uniform1f(dayLoc,light.day);
+ gl.uniform1f(nightLoc,light.night);
+ gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,texture);gl.uniform1i(gl.getUniformLocation(prog,'atlas'),0);
  gl.drawArrays(gl.TRIANGLES,0,count);
 }
 function loop(now){
- const dt=Math.min(.05,(now-last)/1000);last=now;worldTime=(worldTime+(dt*24/DAY_LENGTH))%24;update(dt);render();
- document.getElementById("stats").textContent=`${fps} FPS  |  ${formatWorldTime(worldTime)}  |  CITY ${Math.round(count/36)} tris/box-equivalent`;
- frames++;if(now-ft>600){fps=Math.round(frames*1000/(now-ft));frames=0;ft=now;}
+ const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;
+ worldTime=(worldTime+dt*24/DAY_LENGTH)%24;
+ update(dt);render();
+ const stats=document.getElementById('stats');
+ stats.textContent=`${fps} FPS  |  ${formatWorldTime(worldTime)}  |  POS ${player.x.toFixed(1)}, ${player.z.toFixed(1)}`;
+ frames++;if(now-ft>700){fps=Math.round(frames*1000/(now-ft));frames=0;ft=now;}
  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
