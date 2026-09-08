@@ -25,7 +25,7 @@ out vec4 outColor;
 void main(){
  vec4 tex=texture(atlas,vUV);
  float lam=max(dot(normalize(vN),normalize(sunDir)),0.0);
- float hemi=.68+.32*lam;
+ float hemi=.78+.22*lam;
  vec3 c=tex.rgb*vTint.rgb*hemi;
  // Windows carry a warm emissive lift.
  float warm=smoothstep(.56,.8,tex.r)*vTint.a;
@@ -74,8 +74,10 @@ function face(a,b,c,d,n,uv,tint){
  for(let i=0;i<6;i++){P.push(...vs[i]);C.push(...n);UV.push(us[i][0],us[i][1]);COL.push(...tint,1)}
 }
 function addBox(x,y,z,sx,sy,sz,material="#ffffff",yaw=0,solid=false){
- let t=A[material]||A.concrete, tint=material==="#ffffff"?[1,1,1]:rgb(material);
- if(Array.isArray(material)){t=A[material[0]]||A.concrete;tint=material[1]}
+ let t=A.concrete, tint=[1,1,1];
+ if(Array.isArray(material)){t=A[material[0]]||A.concrete;tint=material[1]||[1,1,1]}
+ else if(typeof material==="string" && A[material]){t=A[material];tint=[1,1,1]}
+ else if(typeof material==="string" && material[0]==="#"){t=A.concrete;tint=rgb(material)}
  const [c,s]=[Math.cos(yaw),Math.sin(yaw)];
  const local=[
   [-sx,-sy,sz],[sx,-sy,sz],[sx,sy,sz],[-sx,sy,sz],
@@ -99,25 +101,38 @@ function addCylinder(x,y,z,r,h,material,segments=10){
   face([x1,y-h,z1],[x2,y-h,z2],[x2,y,z2],[x1,y,z1],[Math.cos((a+b)/2),0,Math.sin((a+b)/2)],tint,[.9,.9,.9,1]);
  }
 }
-function roadBox(){addBox(0,-.07,0,110,.07,110,"asphalt");}
+function roadBox(){
+ // Base terrain: the city blocks sit on a neutral ground plane.
+ addBox(0,-.08,0,110,.08,110,"concrete_dirty");
+}
 roadBox();
 
-// City streets: realistic hierarchy — arterial + perpendicular side streets.
-const sidewalkBlocks=[
- [-55,-55,41,41], [14,-55,41,41], [-55,14,41,41], [14,14,41,41]
-];
-for(const [x,z,w,d] of sidewalkBlocks){
- addBox(x,.02,z,w/2,.04,d/2,"sidewalk");
+// Actual street grid: asphalt corridors are continuous, with sidewalks/buildings kept inside blocks.
+const roadW=11.5;
+for(const x of [-36,0,36]) addBox(x,.005,0,roadW/2,.025,55,"asphalt");
+for(const z of [-36,0,36]) addBox(0,.008,z,55,.025,roadW/2,"asphalt");
+
+// Sidewalk blocks between the streets.
+const blocks=[[-54,-54,30,30],[-18,-54,30,30],[18,-54,30,30],[54,-54,30,30],
+ [-54,-18,30,30],[-18,-18,30,30],[18,-18,30,30],[54,-18,30,30],
+ [-54,18,30,30],[-18,18,30,30],[18,18,30,30],[54,18,30,30],
+ [-54,54,30,30],[-18,54,30,30],[18,54,30,30],[54,54,30,30]];
+for(const [x,z,w,d] of blocks) addBox(x,.04,z,w/2,.045,d/2,"sidewalk");
+
+// Lane markings and intersections.
+for(const x of [-36,0,36]){
+ for(let z=-49;z<=49;z+=5.5) addBox(x,.055,z,.08,.012,1.55,"lane");
 }
-// Roads wider than the small center prototype.
-for(let x=-55;x<=55;x+=2.75)addBox(x,.012,0,.018,.012,7.2,"lane");
-for(let z=-55;z<=55;z+=2.75)addBox(0,.013,z,7.2,.012,.018,"lane");
-// curb lines
-for(const [x,z,sx,sz] of [[0,-7.5,110,.16],[0,7.5,110,.16],[-7.5,0,.16,110],[7.5,0,.16,110]])
-  addBox(x,.14,z,sx,.14,sz,"concrete");
-// crosswalks
-for(let i=-5;i<=5;i++){addBox(i*1.0,.16,-5.9,.36,.012,1.2,"lane");addBox(i*1.0,.16,5.9,.36,.012,1.2,"lane");
- addBox(-5.9,.16,i*1.0,1.2,.012,.36,"lane");addBox(5.9,.16,i*1.0,1.2,.012,.36,"lane")}
+for(const z of [-36,0,36]){
+ for(let x=-49;x<=49;x+=5.5) addBox(x,.058,z,1.55,.012,.08,"lane");
+}
+// Curbs around the three main vertical/horizontal corridors.
+for(const x of [-36,0,36]){ addBox(x-roadW/2-.12,.16,0,.12,.14,55,"concrete"); addBox(x+roadW/2+.12,.16,0,.12,.14,55,"concrete"); }
+for(const z of [-36,0,36]){ addBox(0,.16,z-roadW/2-.12,55,.14,.12,"concrete"); addBox(0,.16,z+roadW/2+.12,55,.14,.12,"concrete"); }
+// Crosswalk bars at each major intersection.
+for(const x of [-36,0,36]) for(const z of [-36,0,36]){
+ for(let i=-4;i<=4;i++){ addBox(x+i*1.0,.09,z-roadW/2-.8,.32,.012,.65,"lane"); addBox(x-roadW/2-.8,.09,z+i*1.0,.65,.012,.32,"lane"); }
+}
 
 // Building generator.
 const buildingMats=["concrete_dirty","brick_red","stucco_warm","painted_concrete","brick_dark","stone_block"];
@@ -154,23 +169,14 @@ function building(x,z,w,d,h,style){
 }
 
 const spots=[
- [-43,-42,13,18,14,1],[-26,-45,11,15,21,2],[-45,-23,17,11,11,3],[-30,-26,11,10,27,4],[-18,-40,7,8,9,5],
- [29,-46,14,16,17,6],[46,-29,11,15,12,7],[19,-33,10,12,28,8],[34,-13,16,10,15,9],[48,-4,8,10,23,10],
- [-45,30,14,17,13,11],[-27,27,11,15,19,12],[-42,47,9,10,24,13],[-18,45,15,11,12,14],
- [29,27,16,16,13,15],[45,30,10,16,21,16],[28,46,16,11,16,17],[46,47,9,10,30,18],
- [-48,8,8,9,10,19],[49,9,8,12,14,20]
-];
+ [-54,-54,10,12,14,1],[-18,-54,11,13,21,2],[18,-54,12,11,17,3],[54,-54,10,13,18,4],
+ [-54,-18,12,10,16,5],[-18,-18,11,12,27,1],[18,-18,13,10,20,2],[54,-18,10,12,15,3],
+ [-54,18,11,13,18,4],[-18,18,13,10,24,5],[18,18,12,12,16,1],[54,18,10,11,22,2],
+ [-54,54,11,12,19,3],[-18,54,12,10,14,4],[18,54,10,13,23,5],[54,54,12,11,17,1]
+]
 for(const b of spots)building(...b);
 
-// Low-rise commercial strips facing the central roads.
-for(const x of [-44,-34,-24,24,34,44]){
- building(x,-18,8,5,7,Math.abs(x)%5);
- building(x,18,8,5,7,(Math.abs(x)+2)%5);
-}
-for(const z of [-44,-34,-24,24,34,44]){
- building(-18,z,5,8,7,(Math.abs(z)+1)%5);
- building(18,z,5,8,7,(Math.abs(z)+3)%5);
-}
+// Low-rise corner/commercial buildings are already represented by the block layout above.
 
 // Street lamps: poles + horizontal arms + glowing lamp blocks.
 function streetLamp(x,z,flip=1){
@@ -250,7 +256,7 @@ gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,2,gl.FLOAT,false,stride*4
 gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,4,gl.FLOAT,false,stride*4,32);
 
 // Mobile-only FPS controls. No keyboard, mouse or pointer-lock path exists in this build.
-const player={x:0,y:1.72,z:31,yaw:0,pitch:0};
+const player={x:0,y:1.72,z:28,yaw:0,pitch:0};
 const stickEl=document.getElementById("stick"),knob=document.getElementById("knob");
 const lookEl=document.getElementById("lookSurface"),runBtn=document.getElementById("runBtn"),startEl=document.getElementById("start"),enterBtn=document.getElementById("enter");
 const stick={active:false,id:null,x:0,y:0},look={active:false,id:null,x:0,y:0};
