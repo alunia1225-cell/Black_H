@@ -1,0 +1,20 @@
+{
+  "version": "11",
+  "asset_upgrade": true,
+  "new_high_detail_buildings": [
+    "brick_5f",
+    "office_6f",
+    "duplex",
+    "storefront",
+    "warehouse"
+  ],
+  "rules": [
+    "distinct silhouettes",
+    "no cloned footprint",
+    "no wall-mass background",
+    "street first",
+    "opaque road",
+    "unique intersection markings"
+  ],
+  "note": "High-detail architectural replacement assets; apply alongside current runtime."
+}

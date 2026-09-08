@@ -1,0 +1,53 @@
+{
+  "version": "10",
+  "goal": "AAA-style realistic American small-city street",
+  "rules": {
+    "no_low_poly_visual_style": true,
+    "no_overlapping_buildings": true,
+    "no_overlapping_crosswalks": true,
+    "opaque_road_surface": true,
+    "no_wall_like_background_masses": true,
+    "distinct_building_families": true
+  },
+  "building_families": [
+    "single_family_wood",
+    "single_family_brick",
+    "duplex",
+    "rowhouse",
+    "corner_store",
+    "diner",
+    "gas_station",
+    "motel",
+    "apartment_3_story",
+    "apartment_5_story",
+    "office_4_story",
+    "office_6_story",
+    "auto_shop",
+    "warehouse"
+  ],
+  "street_layers": [
+    "road_base",
+    "lane_markings",
+    "curb",
+    "sidewalk",
+    "driveways",
+    "parking",
+    "crosswalk"
+  ],
+  "pbr_maps": [
+    "basecolor",
+    "normal",
+    "roughness",
+    "ao"
+  ],
+  "decals": [
+    "decal_foundation_grime.png",
+    "decal_oil_stain.png",
+    "decal_rain_streaks.png"
+  ],
+  "lod": {
+    "near_m": 45,
+    "mid_m": 120,
+    "far_m": 260
+  }
+}
