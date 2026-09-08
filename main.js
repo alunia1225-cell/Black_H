@@ -138,249 +138,254 @@ function addCylinder(x,y,z,r,h,material="metal",segments=8,tintOverride=null){
   }
 }
 
-// --- City layout: a real street grid with separate roadway / curb / sidewalk / lots. ---
-const ROAD_W=14, BLOCK=36, EXTENT=110;
-const streets=[-54,-18,18,54];
-addBox(0,-0.08,0,110,.08,110,"asphalt",0,false,T.asphalt);
-// Cross streets and main roads as explicit layers.
-for(const x of streets) addBox(x,0.00,0,ROAD_W/2,.035,110,"asphalt",0,false,T.asphaltLight);
-for(const z of streets) addBox(0,0.005,z,110,.035,ROAD_W/2,"asphalt",0,false,T.asphaltLight);
-// Center/edge road markings.
+// --- City: block-first urban layout. Roads, curbs, sidewalks, lots and buildings never overlap. ---
+const ROAD_W=11, SIDEWALK_W=2.6, CURB_W=.34, SPACING=42, EXTENT=126;
+const streets=[-63,-21,21,63];
+
+// Base city slab. Individual lots cover this so asphalt is never visible beneath buildings.
+addBox(0,-0.12,0,EXTENT,.12,EXTENT,"asphalt",0,false,T.asphalt);
+
+// Roadways: each road is a single continuous carriageway with a subtle crown/edge strip.
 for(const x of streets){
-  for(let z=-103;z<=103;z+=8) addBox(x,0.045,z,0.055,.012,2.45,"lane",0,false,T.lane);
-  addBox(x-ROAD_W/2+0.55,0.047,0,0.045,.014,110,"lane",0,false,T.white);
-  addBox(x+ROAD_W/2-0.55,0.047,0,0.045,.014,110,"lane",0,false,T.white);
+  addBox(x,0.00,0,ROAD_W/2,.035,EXTENT,"asphalt_worn",0,false,[.25,.27,.28,1]);
+  addBox(x-ROAD_W/2+.42,.045,0,.045,.012,EXTENT,"lane",0,false,T.white);
+  addBox(x+ROAD_W/2-.42,.045,0,.045,.012,EXTENT,"lane",0,false,T.white);
+  for(let z=-119;z<=119;z+=7) addBox(x,0.047,z,.035,.012,2.15,"lane",0,false,T.lane);
 }
 for(const z of streets){
-  for(let x=-103;x<=103;x+=8) addBox(x,0.05,z,2.45,.012,0.055,"lane",0,false,T.lane);
-  addBox(0,0.052,z,110,.014,0.045,"lane",0,false,T.white);
+  addBox(0,0.002,z,EXTENT,.035,ROAD_W/2,"asphalt_worn",0,false,[.25,.27,.28,1]);
+  addBox(0,0.047,z-ROAD_W/2+.42,EXTENT,.012,.045,"lane",0,false,T.white);
+  addBox(0,0.047,z+ROAD_W/2-.42,EXTENT,.012,.045,"lane",0,false,T.white);
+  for(let x=-119;x<=119;x+=7) addBox(x,0.049,z,2.15,.012,.035,"lane",0,false,T.lane);
 }
-// Curbs and sidewalks around every street.
+
+// Curbs + sidewalks. Their extents are calculated from the road edge, so there is no overlap.
+const sidewalkOffset=ROAD_W/2+CURB_W+SIDEWALK_W/2;
 for(const x of streets){
-  addBox(x-ROAD_W/2-1.0,0.18,0,0.55,.18,110,"concrete",0,false,T.concreteDark);
-  addBox(x+ROAD_W/2+1.0,0.18,0,0.55,.18,110,"concrete",0,false,T.concreteDark);
-  addBox(x-ROAD_W/2-3.2,0.09,0,1.7,.09,110,"sidewalk",0,false,T.sidewalk);
-  addBox(x+ROAD_W/2+3.2,0.09,0,1.7,.09,110,"sidewalk",0,false,T.sidewalkLight);
+  addBox(x-ROAD_W/2-CURB_W/2,0.13,0,CURB_W,.13,EXTENT,"curb",0,false,T.concreteDark);
+  addBox(x+ROAD_W/2+CURB_W/2,0.13,0,CURB_W,.13,EXTENT,"curb",0,false,T.concreteDark);
+  addBox(x-sidewalkOffset,0.075,0,SIDEWALK_W/2,.075,EXTENT,"sidewalk_paver",0,false,T.sidewalk);
+  addBox(x+sidewalkOffset,0.075,0,SIDEWALK_W/2,.075,EXTENT,"sidewalk_paver",0,false,T.sidewalkLight);
 }
 for(const z of streets){
-  addBox(0,0.18,z-ROAD_W/2-1.0,110,.18,.55,"concrete",0,false,T.concreteDark);
-  addBox(0,0.18,z+ROAD_W/2+1.0,110,.18,.55,"concrete",0,false,T.concreteDark);
-  addBox(0,0.09,z-ROAD_W/2-3.2,110,.09,1.7,"sidewalk",0,false,T.sidewalk);
-  addBox(0,0.09,z+ROAD_W/2+3.2,110,.09,1.7,"sidewalk",0,false,T.sidewalkLight);
+  addBox(0,0.13,z-ROAD_W/2-CURB_W/2,EXTENT,.13,CURB_W,"curb",0,false,T.concreteDark);
+  addBox(0,0.13,z+ROAD_W/2+CURB_W/2,EXTENT,.13,CURB_W,"curb",0,false,T.concreteDark);
+  addBox(0,0.075,z-sidewalkOffset,EXTENT,.075,SIDEWALK_W/2,"sidewalk_paver",0,false,T.sidewalk);
+  addBox(0,0.075,z+sidewalkOffset,EXTENT,.075,SIDEWALK_W/2,"sidewalk_paver",0,false,T.sidewalkLight);
 }
-// Crosswalk stripes at major intersections.
+
+// Crosswalks: stop before the curb and sit on the roadway only.
+const crossHalf=ROAD_W/2-.85;
 for(const sx of streets) for(const sz of streets){
   for(let k=-4;k<=4;k++){
-    addBox(sx+k*1.2,0.075,sz-9.4,.34,.012,1.35,"lane",0,false,T.white);
-    addBox(sx+k*1.2,0.075,sz+9.4,.34,.012,1.35,"lane",0,false,T.white);
-    addBox(sx-9.4,0.075,sz+k*1.2,1.35,.012,.34,"lane",0,false,T.white);
-    addBox(sx+9.4,0.075,sz+k*1.2,1.35,.012,.34,"lane",0,false,T.white);
+    addBox(sx+k*.85,0.062,sz-crossHalf,.23,.012,.65,"lane",0,false,T.white);
+    addBox(sx+k*.85,0.062,sz+crossHalf,.23,.012,.65,"lane",0,false,T.white);
+    addBox(sx-crossHalf,0.064,sz+k*.85,.65,.012,.23,"lane",0,false,T.white);
+    addBox(sx+crossHalf,0.064,sz+k*.85,.65,.012,.23,"lane",0,false,T.white);
   }
 }
 
-function windowModule(x,y,z,w,h,front,mat='glass_blue',frame='facade_trim'){
-  // Recessed glass with physical frame: this is deliberately geometry, not a flat painted rectangle.
-  const dep=0.055;
-  if(front){
-    addBox(x,y,z,w,h,dep,mat,0,false,mat==='dirty_window'?T.windowDark:T.glassBlue);
-    addBox(x,y+h+.055,z,.05,.055,.10,frame,0,false,T.concreteDark);
-    addBox(x,y-h-.055,z,.05,.055,.10,frame,0,false,T.concreteDark);
-    addBox(x-w-.055,y,z,.055,h,.10,frame,0,false,T.concreteDark);
-    addBox(x+w+.055,y,z,.055,h,.10,frame,0,false,T.concreteDark);
-    addBox(x,y,z-.01,.035,h,.12,frame,0,false,T.concreteDark);
-  } else {
-    addBox(x,y,z,dep,h,w,mat,0,false,mat==='dirty_window'?T.windowDark:T.glassBlue);
+function windowUnit(x,y,z,w,h,depth,rot,lit=false){
+  const glass=lit?'glass_green':'dirty_window';
+  addBox(x,y,z,w,h,depth,glass,rot,false,lit?[.48,.68,.70,1]:T.windowDark);
+  // Recess and physical frame.
+  addBox(x,y+h+.035,z,.045,.035,depth+.05,"facade_trim",rot,false,T.concreteDark);
+  addBox(x,y-h-.035,z,.045,.035,depth+.05,"facade_trim",rot,false,T.concreteDark);
+  addBox(x-w-.035,y,z,.035,h,depth+.05,"facade_trim",rot,false,T.concreteDark);
+  addBox(x+w+.035,y,z,.035,h,depth+.05,"facade_trim",rot,false,T.concreteDark);
+  addBox(x,y,z-depth-.012,.018,h,.028,"facade_trim",rot,false,T.concreteDark);
+}
+function doorUnit(x,z,rot=0,shop=false){
+  addBox(x,1.18,z,.58,1.18,.10,shop?'glass_blue':'dark',rot,false,shop?T.glassBlue:T.black);
+  addBox(x-.43,1.18,z-.11,.055,1.18,.12,"facade_trim",rot,false,T.concreteDark);
+  addBox(x+.43,1.18,z-.11,.055,1.18,.12,"facade_trim",rot,false,T.concreteDark);
+  addBox(x,2.46,z-.12,.56,.065,.12,"light",rot,false,T.light);
+}
+function balcony(x,y,z,w,d,rot=0){
+  addBox(x,y,z,w,.055,d,"granite",rot,false,T.concreteDark);
+  addBox(x-w+.06,y+.42,z-d+.06,.035,.42,.035,"metal",rot,false,T.metalDark);
+  addBox(x+w-.06,y+.42,z-d+.06,.035,.42,.035,"metal",rot,false,T.metalDark);
+  addBox(x,y+.42,z-d+.06,w,.035,.035,"metal",rot,false,T.metalDark);
+}
+function roofDetail(x,y,z,w,d,kind){
+  addBox(x,y,z,w,.10,d,"roof_shingle",0,false,T.roof);
+  if(kind%2===0){
+    addBox(x-w*.28,y+.28,z,d*.08,.28,w*.10,"metal",0,false,T.metalDark);
+    addBox(x+w*.28,y+.18,z,w*.08,.18,d*.10,"metal",0,false,T.metalDark);
+  }else{
+    addBox(x,y+.20,z,w*.12,.20,d*.12,"metal",0,false,T.metalDark);
+    addBox(x+w*.30,y+.13,z+d*.18,w*.10,.13,d*.18,"metal",0,false,T.metal);
   }
 }
-function facadeDoor(x,z,rot=0){
-  addBox(x,1.18,z,.62,1.18,.08,'dark',rot,false,T.black);
-  addBox(x-.42,1.18,z-.10,.055,1.18,.10,'facade_trim',rot,false,T.concreteDark);
-  addBox(x+.42,1.18,z-.10,.055,1.18,.10,'facade_trim',rot,false,T.concreteDark);
-  addBox(x,2.45,z-.11,.55,.07,.10,'light',rot,false,T.light);
-}
+
+// Detailed mid-rise building: shallow projections, recessed windows, floor bands and roof parapet.
 function building(x,z,w,d,h,kind=0,rot=0){
   const mats=['concrete','brick_red','stucco','stone','painted'];
-  const trims=['facade_trim','facade_shadow','facade_trim','granite','facade_trim'];
-  const body=mats[kind%5], tint=[T.concrete,T.brick,T.concreteWarm,T.concreteDark,T.concrete][kind%5];
+  const bodies=['concreteWarm','brick','concrete','concreteDark','concrete'];
+  const body=mats[kind%5];
+  const tint=T[bodies[kind%5]]||T.concrete;
   addBox(x,h/2,z,w/2,h/2,d/2,body,rot,true,tint);
-  // Floor slabs, roof parapet and a shallow mechanical crown.
-  const floors=Math.max(2,Math.floor(h/3.15));
-  for(let f=1;f<floors;f++) addBox(x,f*3.1,z,w/2+.05,.055,d/2+.05,trims[kind%5],rot,false,T.concreteDark);
-  addBox(x,h+.10,z,w/2+.24,.12,d/2+.24,'roof',rot,false,T.roof);
-  if(h>11){
-    addBox(x,h+.42,z,w*.22,.22,d*.22,'metal',rot,false,T.metalDark);
-    addBox(x+w*.25,h+.34,z,.12,.30,d*.14,'metal',rot,false,T.metal);
-  }
-  const rows=Math.max(2,Math.floor((h-1.5)/3.05));
-  const cols=Math.max(2,Math.floor((w-1.8)/3.0));
-  const sideCols=Math.max(2,Math.floor((d-1.8)/3.0));
-  for(let r=0;r<rows;r++){
-    const wy=1.85+r*3.05; if(wy>h-.8) continue;
+  // Base plinth, cornice and roof parapet.
+  addBox(x,.18,z,w/2+.10,.18,d/2+.10,'granite',rot,false,T.concreteDark);
+  for(let fy=3.0;fy<h-1.2;fy+=3.0) addBox(x,fy,z,w/2+.035,.055,d/2+.035,'facade_shadow',rot,false,T.concreteDark);
+  addBox(x,h+.12,z,w/2+.22,.12,d/2+.22,'roof',rot,false,T.roof);
+  addBox(x,h+.34,z,w/2+.18,.18,.10,'concrete',rot,false,T.concreteDark);
+  roofDetail(x,h+.52,z,w*.20,d*.20,kind);
+
+  const floors=Math.max(2,Math.floor((h-1.5)/3));
+  for(let f=0;f<floors;f++){
+    const wy=1.55+f*3.0;
+    const cols=Math.max(2,Math.floor((w-1.5)/2.45));
+    const gap=(cols>1?(w-2.2)/(cols-1):0);
     for(let c=0;c<cols;c++){
-      const wx=x-w/2+1.15+(c*(w-2.3)/Math.max(1,cols-1));
-      const lit=((c*11+r*7+kind*5)%6)!==0;
-      const wm=lit?(kind%3===0?'glass_blue':'glass_green'):'dirty_window';
-      windowModule(wx,wy,z-d/2-.055,.62,.52,true,wm,trims[kind%5]);
-      windowModule(wx,wy,z+d/2+.055,.62,.52,true,wm,trims[kind%5]);
-      // occasional AC compressor / planter under windows
-      if((r+c+kind)%7===0) addBox(wx,wy-.82,z-d/2-.20,.34,.16,.18,'metal',rot,false,T.metalDark);
+      const wx=x-w/2+1.1+c*gap;
+      const lit=((f*7+c*3+kind*5)%9)<3;
+      windowUnit(wx,wy,z-d/2-.075,.48,.82,.055,rot,lit);
+      if((kind+f+c)%8===0) balcony(wx,wy+.90,z-d/2-.38,.62,.42,rot);
     }
-    for(let c=0;c<sideCols;c++){
-      const wz=z-d/2+1.15+(c*(d-2.3)/Math.max(1,sideCols-1));
-      const lit=((c*13+r*3+kind)%5)!==0;
-      addBox(x-w/2-.055,wy,wz,.055,.52,.62,lit?'glass_green':'dirty_window',rot,false,lit?T.glass:T.windowDark);
-      addBox(x+w/2+.055,wy,wz,.055,.52,.62,lit?'glass_green':'dirty_window',rot,false,lit?T.glass:T.windowDark);
+    // Side facade windows, fewer and narrower.
+    const sideRows=Math.max(1,Math.floor((d-2)/3.1));
+    for(let r=0;r<sideRows;r++){
+      const wz=z-d/2+1.2+r*3.0;
+      const lit2=((r+f+kind)%7)<2;
+      windowUnit(x-w/2-.075,wy,wz,.055,.62,.48,rot,lit2);
+      windowUnit(x+w/2+.075,wy,wz,.055,.62,.48,rot,lit2);
     }
   }
-  // Ground-floor storefront with projecting canopy and recessed entrance.
-  addBox(x,1.35,z-d/2-.10,w*.32,1.28,.07,'glass_blue',rot,false,T.glassBlue);
-  addBox(x,2.76,z-d/2-.17,w*.42,.16,.12,'awning',rot,false,T.sign_blue);
-  facadeDoor(x+w*.32,z-d/2-.13,rot);
-  addBox(x,3.02,z-d/2-.19,w*.43,.22,.08,(kind%2)?'sign_blue':'sign_red',rot,false,(kind%2)?T.sign_blue:T.sign_red);
-}
-
-function storefront(x,z,w,d,h,kind=0){
-  addBox(x,h/2,z,w/2,h/2,d/2,kind%2?'brick_red':'stucco',0,true,kind%2?T.brick:T.concreteWarm);
-  addBox(x,h+.08,z,w/2+.15,.10,d/2+.15,'roof',0,false,T.roof);
-  addBox(x,1.45,z-d/2-.10,w*.38,1.35,.06,'glass_blue',0,false,T.glassBlue);
-  addBox(x,2.72,z-d/2-.16,w*.48,.18,.10,kind%2?'sign_blue':'sign_red',0,false,kind%2?T.sign_blue:T.sign_red);
-  facadeDoor(x-w*.28,z-d/2-.13,0);
-  for(let k=0;k<3;k++) addBox(x-w/2+1.0+k*(w-2)/2,1.25,z-d/2-.13,.055,1.1,.10,'facade_trim',0,false,T.concreteDark);
-  addBox(x,3.45,z-d/2-.14,w*.44,.08,.08,'awning',0,false,T.sign_blue);
-}
-
-// 16 blocks, varied building footprints. Roads remain clearly walkable between them.
-const blockCenters=[-72,-36,0,36,72];
-for(let ix=0;ix<4;ix++) for(let iz=0;iz<4;iz++){
-  const cx=(blockCenters[ix]+blockCenters[ix+1])/2, cz=(blockCenters[iz]+blockCenters[iz+1])/2;
-  const n=(ix*17+iz*31)%5;
-  const margin=3.2;
-  const bx0=cx-14+margin, bx1=cx+14-margin, bz0=cz-14+margin, bz1=cz+14-margin;
-  if((ix+iz)%3===0){
-    storefront(cx-6,cz+4,10,8,5+n, n);
-    building(cx+7,cz-4,8,12,9+n*3,(n+2)%5);
-  } else if((ix+iz)%3===1){
-    building(bx0+5,bz0+4,10,9,8+n*3,n);
-    building(bx1-5,bz1-4,10,9,6+n*2,(n+1)%5);
-  } else {
-    building(cx,cz,17,17,10+n*3,(n+3)%5);
-  }
-  // Small parking / service yard in some blocks.
-  if((ix*2+iz)%2===0){
-    addBox(cx+9,0.035,cz+8,3.8,.035,3.8,"asphalt",0,false,T.asphalt);
-    for(let k=-2;k<=2;k++) addBox(cx+9+k*1.25,0.082,cz+8,0.035,.01,3.15,"lane",0,false,T.white);
-    addBox(cx+12.2,.75,cz+8,.55,.75,.7,"metal",0,true,T.metalDark);
-    addBox(cx+12.2,1.45,cz+8,.42,.06,.55,"metal",0,false,T.metal);
+  doorUnit(x-w*.22,z-d/2-.12,rot,false);
+  if(kind%2===0){
+    addBox(x+w*.20,1.25,z-d/2-.15,.72,1.15,.075,"glass_blue",rot,false,T.glassBlue);
+    addBox(x,2.70,z-d/2-.18,w*.38,.13,.11,"awning",rot,false,T.sign_blue);
   }
 }
 
-// Low-rise row along major roads: this breaks the skyline and gives Schedule-I-like scale transitions.
-for(const z of [-72,-36,0,36,72]) for(const side of [-1,1]){
-  const x=side*82;
-  if(Math.abs(z)>72) continue;
-  storefront(x,z,10,9,4+(Math.abs(z)%3),Math.abs(z)%2);
+// Small storefront with a transparent shop front, signage, awning and service door.
+function storefront(x,z,w,d,h,kind=0,rot=0){
+  const body=kind%2?'brick_red':'stucco';
+  addBox(x,h/2,z,w/2,h/2,d/2,body,rot,true,kind%2?T.brick:T.concreteWarm);
+  addBox(x,.18,z,w/2+.08,.18,d/2+.08,'granite',rot,false,T.concreteDark);
+  addBox(x,1.42,z-d/2-.10,w*.34,1.28,.07,'glass_blue',rot,false,T.glassBlue);
+  addBox(x-w*.30,1.42,z-d/2-.10,.40,1.28,.07,'dark',rot,false,T.black);
+  addBox(x+w*.30,1.42,z-d/2-.10,.40,1.28,.07,'dark',rot,false,T.black);
+  addBox(x,2.78,z-d/2-.17,w*.48,.16,.12,'awning',rot,false,kind%2?T.sign_blue:T.sign_red);
+  addBox(x,3.05,z-d/2-.19,w*.43,.22,.08,kind%2?'sign_blue':'sign_red',rot,false,kind%2?T.sign_blue:T.sign_red);
+  doorUnit(x+w*.29,z-d/2-.14,rot,true);
+  for(let k=0;k<4;k++) addBox(x-w/2+1.0+k*(w-2)/3,1.25,z-d/2-.14,.045,1.10,.10,"facade_trim",rot,false,T.concreteDark);
+}
+function townhouse(x,z,w,d,h,kind=0){
+  addBox(x,h/2,z,w/2,h/2,d/2,kind%2?'brick_red':'painted',0,true,kind%2?T.brickDark:T.concreteWarm);
+  addBox(x,.20,z,w/2+.06,.20,d/2+.06,'granite',0,false,T.concreteDark);
+  const floors=Math.max(2,Math.floor(h/3));
+  for(let f=0;f<floors;f++){
+    const y=1.45+f*3;
+    windowUnit(x-w*.22,y,z-d/2-.07,.48,.72,.05,0,(f+kind)%4===0);
+    windowUnit(x+w*.22,y,z-d/2-.07,.48,.72,.05,0,(f+kind+1)%5===0);
+  }
+  doorUnit(x,z-d/2-.12,0,false);
+  addBox(x,h+.10,z,w/2+.12,.10,d/2+.12,'roof_shingle',0,false,T.roof);
 }
 
-// Garages/warehouse strip at the south-east edge.
+// Build each block inside a strict rectangle bounded by the sidewalks.
+const centers=[-42,0,42,84];
+const blockEdge=SPACING/2;
+const lotMin=ROAD_W/2+CURB_W+SIDEWALK_W+.75;
+for(let ix=0;ix<3;ix++) for(let iz=0;iz<3;iz++){
+  const cx=(centers[ix]+centers[ix+1])/2, cz=(centers[iz]+centers[iz+1])/2;
+  const minX=centers[ix]+lotMin, maxX=centers[ix+1]-lotMin;
+  const minZ=centers[iz]+lotMin, maxZ=centers[iz+1]-lotMin;
+  const bw=maxX-minX, bd=maxZ-minZ;
+  // Lot surface is deliberately inside the sidewalk edge.
+  addBox((minX+maxX)/2,0.012,(minZ+maxZ)/2,bw/2,.012,bd/2,(ix+iz)%3===0?'grass':'concrete_dirty',0,false,(ix+iz)%3===0?T.grass:T.concreteDark);
+  const p=(ix*11+iz*17)%6;
+  if(p===0){
+    storefront(minX+bw*.28,minZ+bd*.28,8.8,8.0,4.4,(ix+iz)%2);
+    townhouse(maxX-bw*.28,minZ+bd*.68,8.6,8.4,7.0,iz%2);
+    addBox(maxX-bw*.26,.025,maxZ-bd*.24,5.8,.025,5.0,'asphalt_worn',0,false,T.asphalt);
+  }else if(p===1){
+    building(minX+bw*.30,minZ+bd*.31,9.6,10.8,9.0+(ix%2)*3,ix%5);
+    townhouse(maxX-bw*.30,maxZ-bd*.30,9.0,9.4,6.2,(iz+1)%3);
+  }else if(p===2){
+    building(cx,cz,13.8,12.5,12.0+(iz%2)*4,(ix+iz+2)%5);
+    addBox(minX+bw*.70,.025,minZ+bd*.30,5.0,.025,5.8,'asphalt_worn',0,false,T.asphalt);
+  }else if(p===3){
+    storefront(cx,minZ+bd*.30,11.0,8.0,4.8,(ix+1)%2);
+    building(cx,maxZ-bd*.30,11.2,9.2,10.5,(iz+2)%5);
+  }else if(p===4){
+    building(minX+bw*.28,cz,9.8,13.2,8.0+(iz%3)*2,(ix+3)%5);
+    building(maxX-bw*.28,cz,9.8,13.2,7.5+(ix%3)*2,(iz+1)%5);
+  }else{
+    townhouse(minX+bw*.25,minZ+bd*.30,9.2,8.5,6.4,ix%3);
+    townhouse(maxX-bw*.25,minZ+bd*.30,9.2,8.5,7.0,(iz+1)%3);
+    storefront(cx,maxZ-bd*.30,10.5,8.0,4.5,(ix+iz)%2);
+  }
+}
+
+// Dedicated parking/service district, with marked bays and a low warehouse row.
 for(let i=0;i<5;i++){
-  const x=30+i*13,z=86;
-  addBox(x,3.0,z,5.4,3.0,5.5,"brick",0,true,T.brickDark);
-  addBox(x,2.2,z-5.56,3.3,2.0,.08,"dark",0,false,T.black);
-  addBox(x,4.8,z-5.62,4.1,.16,.06,"sign_blue",0,false,T.sign_blue);
+  const x=25+i*11.5,z=96;
+  addBox(x,0.02,z,5.0,.02,5.2,'asphalt_worn',0,false,T.asphalt);
+  for(let k=-2;k<=2;k++) addBox(x+k*1.75,0.055,z,0.025,.012,4.4,'lane',0,false,T.white);
+  addBox(x,2.7,z+4.6,5.0,2.7,.45,'corrugated',0,true,T.metalDark);
+  addBox(x,1.55,z+4.05,3.2,1.5,.08,'dark',0,false,T.black);
+  addBox(x,3.55,z+3.95,3.8,.16,.10,'sign_blue',0,false,T.sign_blue);
 }
 
-// Street furniture.
+// Street furniture sits on sidewalks, never in the carriageway.
 function streetLamp(x,z,rot=0){
-  addCylinder(x,2.8,z,.09,5.6,"metal",8,T.metalDark);
-  addBox(x+Math.cos(rot)*.85,5.45,z+Math.sin(rot)*.85,.82,.055,.055,"metal",rot,false,T.metal);
-  addBox(x+Math.cos(rot)*1.55,5.18,z+Math.sin(rot)*1.55,.18,.11,.11,"light",rot,false,T.light);
+  addCylinder(x,2.65,z,.075,5.3,'metal',8,T.metalDark);
+  addBox(x+Math.cos(rot)*.75,5.25,z+Math.sin(rot)*.75,.72,.055,.055,'metal',rot,false,T.metal);
+  addBox(x+Math.cos(rot)*1.28,5.03,z+Math.sin(rot)*1.28,.16,.10,.10,'light',rot,false,T.light);
 }
-for(const x of streets) for(const z of [-90,-62,-46,-26,-10,10,26,46,62,90]){
-  streetLamp(x-10,z,0); streetLamp(x+10,z,Math.PI);
+for(const x of streets) for(const z of [-105,-84,-63,-42,-21,0,21,42,63,84,105]){
+  streetLamp(x-sidewalkOffset,z,0);
+  streetLamp(x+sidewalkOffset,z,Math.PI);
 }
+function hydrant(x,z){ addCylinder(x,.60,z,.15,.65,'metal',8,T.sign_red); addCylinder(x,.89,z,.20,.10,'metal',8,T.metal); }
+for(const p of [[-31,-31],[31,-31],[-31,31],[31,31],[73,-31],[-73,31],[31,73],[-31,-73]]) hydrant(...p);
 
-function hydrant(x,z){ addCylinder(x,.65,z,.16,.72,"metal",8,T.sign_red); addCylinder(x,.92,z,.22,.12,"metal",8,T.metal); }
-for(const p of [[-64,-64],[-8,-64],[64,-64],[-64,64],[8,64],[64,64],[-64,8],[64,-8]]) hydrant(...p);
-
-// Utility poles and overhead cables in a few service corridors.
 function pole(x,z){
-  addCylinder(x,4.3,z,.12,8.6,"wood",8,T.wood);
-  addBox(x,8.55,z,1.05,.09,.10,"wood",0,false,T.wood);
+  addCylinder(x,4.2,z,.10,8.4,'wood',8,T.wood);
+  addBox(x,8.45,z,1.0,.08,.08,'wood',0,false,T.wood);
 }
 function cable(a,b,y){
-  const x=(a[0]+b[0])/2,z=(a[1]+b[1])/2,dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz);
-  addBox(x,y,z,len/2,.025,.025,"dark",Math.atan2(dz,dx),false,T.black);
+  const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz);
+  addBox((a[0]+b[0])/2,y,(a[1]+b[1])/2,len/2,.025,.025,'dark',Math.atan2(dz,dx),false,T.black);
 }
-for(const [x,z] of [[-81,-12],[-81,12],[81,-12],[81,12],[-12,-81],[12,-81],[-12,81],[12,81]]) pole(x,z);
-cable([-81,-12],[81,-12],8.6); cable([-81,12],[81,12],8.6); cable([-12,-81],[-12,81],8.6); cable([12,-81],[12,81],8.6);
-
-// Cars parked beside curbs. Their XZ colliders prevent walking through them.
-function car(x,z,yaw,bodyTint){
-  addBox(x,.55,z,1.05,.50,2.15,"metal",yaw,true,bodyTint);
-  addBox(x,1.02,z,.76,.30,1.30,"glass",yaw,false,T.glass);
-  addBox(x,.27,z-1.64,.34,.22,.22,"dark",yaw,false,T.black);
-  addBox(x,.27,z+1.64,.34,.22,.22,"dark",yaw,false,T.black);
-  addBox(x,.70,z-2.03,.50,.12,.035,"light",yaw,false,T.light);
-}
-car(-8,-12,0,[0.16,0.18,0.20,1]);
-car(8,-12,Math.PI,[0.56,0.18,0.15,1]);
-car(-12,8,Math.PI/2,[0.18,0.32,0.46,1]);
-car(12,-8,-Math.PI/2,[0.48,0.42,0.19,1]);
-car(-26,-6,0,[0.33,0.34,0.35,1]);
-car(26,6,Math.PI,[0.26,0.27,0.29,1]);
-car(6,44,Math.PI/2,[0.53,0.53,0.50,1]);
-car(-6,-44,-Math.PI/2,[0.35,0.23,0.18,1]);
-
-// Trees, benches, dumpsters and planters make sidewalks readable.
-function tree(x,z,s=1){
-  addCylinder(x,1.05*s,z,.17*s,2.1*s,"wood",8,T.wood);
-  addBox(x,2.25*s,z,.82*s,.85*s,.82*s,"leaf",0,false,T.leaf);
-  addBox(x+.34*s,2.85*s,z-.10*s,.48*s,.48*s,.48*s,"leaf",0,false,T.leaf);
-}
-for(const p of [[-14,-42,1],[-14,42,.9],[14,-42,.9],[14,42,1],[-42,-14,.9],[42,14,1],[-42,14,.8],[42,-14,.85]]) tree(...p);
-for(const [x,z] of [[-10,-8],[10,-8],[-8,10],[8,-10]]){
-  addBox(x,.44,z,1.15,.08,.30,"wood",0,false,T.wood);
-  addBox(x,.22,z-.22,.08,.22,.08,"metal",0,false,T.metalDark);
-  addBox(x,.22,z+.22,.08,.22,.08,"metal",0,false,T.metalDark);
-}
-for(const [x,z] of [[-5,-8.8],[5,-8.8],[-8.8,5],[8.8,-5]]) addBox(x,.52,z,.32,.52,.32,"metal",0,true,T.metalDark);
-
-// Street-level props: bins, signs, parking meters, vents and loading docks.
-function signPost(x,z,blue=true){
-  addCylinder(x,1.35,z,.045,2.7,'metal',8,T.metalDark);
-  addBox(x,2.65,z,.38,.32,.045,blue?'sign_blue':'sign_red',0,false,blue?T.sign_blue:T.sign_red);
-}
-function dumpster(x,z){
-  addBox(x,.58,z,.62,.58,.82,'corrugated',0,true,T.metalDark);
-  addBox(x,.88,z,.70,.06,.90,'metal',0,false,T.metal);
-}
-function parkingMeter(x,z){
-  addCylinder(x,.72,z,.035,1.44,'metal',8,T.metalDark);
-  addBox(x,1.45,z,.16,.13,.10,'metal',0,false,T.metal);
-}
-for(const [x,z] of [[-11,-25],[11,-25],[-25,11],[25,-11],[-47,-47],[47,47],[-47,47],[47,-47]]) dumpster(x,z);
-for(const [x,z] of [[-11,-18],[11,-18],[-18,11],[18,-11],[-65,18],[65,-18],[-18,65],[18,-65]]) parkingMeter(x,z);
-for(const [x,z] of [[-10,-54],[10,-54],[-54,10],[54,-10],[-82,36],[82,-36]]) signPost(x,z,(x+z)%2===0);
-
-// Brick/stone retaining strips, drainage grates and driveway cuts make the sidewalk read as a constructed street.
-for(const x of streets){
-  for(const z of [-45,-9,27,63]) addBox(x-ROAD_W/2-3.2,.205,z,.90,.025,.10,'metal',0,false,T.metalDark);
-  for(const z of [-72,-36,0,36,72]) addBox(x+ROAD_W/2+3.2,.205,z,.90,.025,.10,'metal',0,false,T.metalDark);
+for(const z of [-84,0,84]){
+  pole(-84,z);pole(-42,z);pole(0,z);pole(42,z);pole(84,z);
+  cable([-84,z],[0,z],8.1); cable([0,z],[84,z],8.1);
 }
 
-// Ground edge and modest skyline. Avoid the giant black wall effect from the previous build.
-addBox(0,-.40,-112,112,.40,.5,"dark",0,false,T.black);
-addBox(0,-.40,112,112,.40,.5,"dark",0,false,T.black);
-addBox(-112,-.40,0,.5,.40,112,"dark",0,false,T.black);
-addBox(112,-.40,0,.5,.40,112,"dark",0,false,T.black);
-const skyline=rand(8941);
-for(let x=-108;x<=108;x+=9){
-  const side=(x%18===0)?1:-1;
-  const z=side*104,h=13+Math.floor(skyline()*22),w=4+skyline()*4,d=4+skyline()*4;
-  addBox(x,h/2,z,w/2,h/2,d/2,skyline()>.45?"concrete":"brick",0,false,skyline()>.45?T.concreteDark:T.brickDark);
+function car(x,z,yaw=0,bodyTint=T.sign_blue){
+  addBox(x,.52,z,1.02,.52,2.10,'metal',yaw,true,bodyTint);
+  addBox(x,1.02,z,.72,.30,1.28,'glass',yaw,false,T.glassBlue);
+  addBox(x,.25,z-1.62,.32,.20,.22,'dark',yaw,false,T.black);
+  addBox(x,.25,z+1.62,.32,.20,.22,'dark',yaw,false,T.black);
+  addBox(x,.72,z-2.02,.48,.11,.035,'light',yaw,false,T.light);
 }
+for(const p of [[-10,-31,0],[-32,10,Math.PI/2],[10,31,Math.PI],[32,-10,-Math.PI/2],[52,-10,-Math.PI/2],[-52,10,Math.PI/2]]) car(...p);
 
-// Pack geometry.
+function bench(x,z,rot=0){
+  addBox(x,.46,z,1.10,.07,.28,'wood',rot,false,T.wood);
+  addBox(x,.23,z-.22,.07,.23,.07,'metal',rot,false,T.metalDark);
+  addBox(x,.23,z+.22,.07,.23,.07,'metal',rot,false,T.metalDark);
+}
+function bin(x,z){ addBox(x,.55,z,.48,.55,.42,'corrugated',0,true,T.metalDark); addBox(x,.86,z,.54,.05,.46,'metal',0,false,T.metal); }
+for(const p of [[-10,-10],[10,-10],[-10,10],[10,10],[-52,-10],[52,10]]) bench(...p);
+for(const p of [[-12,-10],[12,10],[-52,10],[52,-10]]) bin(...p);
+
+// World boundary below ground prevents accidental camera drop.
+addBox(0,-1.0,-EXTENT-1,EXTENT,.9,.5,'dark',0,false,T.black);
+addBox(0,-1.0,EXTENT+1,EXTENT,.9,.5,'dark',0,false,T.black);
+addBox(-EXTENT-1,-1.0,0,.5,.9,EXTENT,'dark',0,false,T.black);
+addBox(EXTENT+1,-1.0,0,.5,.9,EXTENT,'dark',0,false,T.black);
+
+// Additional distant low-rise skyline, kept sparse so the street reads as a real district rather than a wall of towers.
+for(const [x,z,w,d,h,k] of [
+  [-104,-96,10,12,10,1],[104,-96,12,10,13,2],[-104,96,12,10,12,0],[104,96,10,12,15,3],
+  [-96,-18,8,12,9,4],[96,18,8,12,11,1],[-18,-104,12,8,12,2],[18,104,12,8,10,0]
+]) building(x,z,w,d,h,k);
+
 const stride=12, count=P.length/3;
 const data=new Float32Array(count*stride);
 for(let i=0;i<count;i++){
