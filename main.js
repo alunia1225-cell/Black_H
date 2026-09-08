@@ -33,17 +33,19 @@ uniform vec3 cam;
 out vec4 outColor;
 void main(){
   vec4 tex=texture(atlas,vUV);
+  vec3 base=tex.rgb*vTint.rgb;
   vec3 N=normalize(vN);
-  float sun=max(dot(N,normalize(sunDir)),0.0);
-  // Keep streets and building sides readable even when they face away from the sun.
-  float hemi=0.70+0.30*sun;
-  vec3 c=tex.rgb*vTint.rgb*hemi;
-  // Soft warm lift for bright window pixels.
-  float warm=smoothstep(0.50,0.78,tex.r)*smoothstep(0.34,0.70,tex.g)*vTint.a;
-  c+=vec3(0.035,0.022,0.010)*warm;
-  // Very light distance haze; never crushes the city to black.
-  float fog=smoothstep(135.0,210.0,length(vW-cam));
-  c=mix(c,vec3(0.44,0.50,0.54),fog*0.34);
+  vec3 L=normalize(sunDir);
+  vec3 V=normalize(cam-vW);
+  float ndl=max(dot(N,L),0.0);
+  float sky=0.76+0.24*max(N.y,0.0);
+  float diffuse=0.34+0.66*ndl;
+  float spec=pow(max(dot(reflect(-L,N),V),0.0),32.0)*0.055;
+  vec3 c=base*(sky*diffuse)+vec3(spec);
+  float dist=length(vW-cam);
+  float fog=smoothstep(145.0,230.0,dist);
+  c=mix(c,vec3(0.43,0.50,0.54),fog*0.28);
+  c=pow(max(c,vec3(0.0)),vec3(0.88));
   outColor=vec4(c,1.0);
 }`;
 
@@ -75,10 +77,16 @@ atlas.onload=()=>{
 };
 
 const A={
-  concrete:[0,.0,.25,.25], brick:[.25,0,.5,.25], glass:[.5,0,.75,.25], window:[.75,0,1,.25],
-  asphalt:[0,.25,.25,.5], sidewalk:[.25,.25,.5,.5], roof:[.5,.25,.75,.5], dark:[.75,.25,1,.5],
-  metal:[0,.5,.25,.75], grass:[.25,.5,.5,.75], sign_red:[.5,.5,.75,.75], sign_blue:[.75,.5,1,.75],
-  lane:[0,.75,.25,1], light:[.25,.75,.5,1], wood:[.5,.75,.75,1], leaf:[.75,.75,1,1]
+  concrete:[0,0,.125,.125], brick:[.125,0,.25,.125], glass:[.25,0,.375,.125], window:[.375,0,.5,.125],
+  asphalt:[0,.125,.125,.25], sidewalk:[.125,.125,.25,.25], roof:[.25,.125,.375,.25], dark:[.375,.125,.5,.25],
+  metal:[0,.25,.125,.375], grass:[.125,.25,.25,.375], sign_red:[.25,.25,.375,.375], sign_blue:[.375,.25,.5,.375],
+  lane:[0,.375,.125,.5], light:[.125,.375,.25,.5], wood:[.25,.375,.375,.5], leaf:[.375,.375,.5,.5],
+  brick_red:[.5,0,.625,.125], brick_dark:[.625,0,.75,.125], stucco:[.75,0,.875,.125], stone:[.875,0,1,.125],
+  glass_blue:[.5,.125,.625,.25], glass_green:[.625,.125,.75,.25], dirty_window:[.75,.125,.875,.25], dark_glass:[.875,.125,1,.25],
+  asphalt_worn:[.5,.25,.625,.375], sidewalk_paver:[.625,.25,.75,.375], curb:[.75,.25,.875,.375], tile:[.875,.25,1,.375],
+  rust:[.5,.375,.625,.5], corrugated:[.625,.375,.75,.5], plywood:[.75,.375,.875,.5], plaster:[.875,.375,1,.5],
+  facade_trim:[.5,.5,.625,.625], facade_shadow:[.625,.5,.75,.625], awning:[.75,.5,.875,.625], roof_shingle:[.875,.5,1,.625],
+  graffiti:[.5,.625,.625,.75], concrete_dirty:[.625,.625,.75,.75], painted:[.75,.625,.875,.75], granite:[.875,.625,1,.75]
 };
 const T={
   concrete:[0.74,0.75,0.73,1], concreteWarm:[0.79,0.74,0.67,1], concreteDark:[0.46,0.48,0.49,1],
@@ -170,44 +178,75 @@ for(const sx of streets) for(const sz of streets){
   }
 }
 
+function windowModule(x,y,z,w,h,front,mat='glass_blue',frame='facade_trim'){
+  // Recessed glass with physical frame: this is deliberately geometry, not a flat painted rectangle.
+  const dep=0.055;
+  if(front){
+    addBox(x,y,z,w,h,dep,mat,0,false,mat==='dirty_window'?T.windowDark:T.glassBlue);
+    addBox(x,y+h+.055,z,.05,.055,.10,frame,0,false,T.concreteDark);
+    addBox(x,y-h-.055,z,.05,.055,.10,frame,0,false,T.concreteDark);
+    addBox(x-w-.055,y,z,.055,h,.10,frame,0,false,T.concreteDark);
+    addBox(x+w+.055,y,z,.055,h,.10,frame,0,false,T.concreteDark);
+    addBox(x,y,z-.01,.035,h,.12,frame,0,false,T.concreteDark);
+  } else {
+    addBox(x,y,z,dep,h,w,mat,0,false,mat==='dirty_window'?T.windowDark:T.glassBlue);
+  }
+}
+function facadeDoor(x,z,rot=0){
+  addBox(x,1.18,z,.62,1.18,.08,'dark',rot,false,T.black);
+  addBox(x-.42,1.18,z-.10,.055,1.18,.10,'facade_trim',rot,false,T.concreteDark);
+  addBox(x+.42,1.18,z-.10,.055,1.18,.10,'facade_trim',rot,false,T.concreteDark);
+  addBox(x,2.45,z-.11,.55,.07,.10,'light',rot,false,T.light);
+}
 function building(x,z,w,d,h,kind=0,rot=0){
-  const mats=["concrete","brick","glass","concrete","brick"][kind%5];
-  const tint=[T.concrete,T.brick,T.glassBlue,T.concreteWarm,T.brickDark][kind%5];
-  addBox(x,h/2,z,w/2,h/2,d/2,mats,rot,true,tint);
-  addBox(x,h+0.12,z,w/2+0.18,.10,d/2+0.18,"roof",rot,false,(kind%3===0)?T.roofLight:T.roof);
-  const rows=Math.max(2,Math.floor((h-1.4)/3.1));
-  const cols=Math.max(2,Math.floor((w-1.6)/2.8));
-  const sideCols=Math.max(2,Math.floor((d-1.6)/2.8));
+  const mats=['concrete','brick_red','stucco','stone','painted'];
+  const trims=['facade_trim','facade_shadow','facade_trim','granite','facade_trim'];
+  const body=mats[kind%5], tint=[T.concrete,T.brick,T.concreteWarm,T.concreteDark,T.concrete][kind%5];
+  addBox(x,h/2,z,w/2,h/2,d/2,body,rot,true,tint);
+  // Floor slabs, roof parapet and a shallow mechanical crown.
+  const floors=Math.max(2,Math.floor(h/3.15));
+  for(let f=1;f<floors;f++) addBox(x,f*3.1,z,w/2+.05,.055,d/2+.05,trims[kind%5],rot,false,T.concreteDark);
+  addBox(x,h+.10,z,w/2+.24,.12,d/2+.24,'roof',rot,false,T.roof);
+  if(h>11){
+    addBox(x,h+.42,z,w*.22,.22,d*.22,'metal',rot,false,T.metalDark);
+    addBox(x+w*.25,h+.34,z,.12,.30,d*.14,'metal',rot,false,T.metal);
+  }
+  const rows=Math.max(2,Math.floor((h-1.5)/3.05));
+  const cols=Math.max(2,Math.floor((w-1.8)/3.0));
+  const sideCols=Math.max(2,Math.floor((d-1.8)/3.0));
   for(let r=0;r<rows;r++){
-    const wy=1.8+r*3.05;
-    if(wy>h-0.75) continue;
+    const wy=1.85+r*3.05; if(wy>h-.8) continue;
     for(let c=0;c<cols;c++){
-      const wx=x-w/2+0.9+(c*(w-1.8)/Math.max(1,cols-1));
-      const lit=((c*11+r*7+kind*5)%5)!==0;
-      const wm=lit?"window":"dark";
-      addBox(wx,wy,z-d/2-0.035,Math.min(.82,(w/cols)*.28),.62,.03,wm,rot,false,lit?T.window:T.windowDark);
-      // Opposite facade also gets windows.
-      addBox(wx,wy,z+d/2+0.035,Math.min(.82,(w/cols)*.28),.62,.03,wm,rot,false,lit?T.window:T.windowDark);
+      const wx=x-w/2+1.15+(c*(w-2.3)/Math.max(1,cols-1));
+      const lit=((c*11+r*7+kind*5)%6)!==0;
+      const wm=lit?(kind%3===0?'glass_blue':'glass_green'):'dirty_window';
+      windowModule(wx,wy,z-d/2-.055,.62,.52,true,wm,trims[kind%5]);
+      windowModule(wx,wy,z+d/2+.055,.62,.52,true,wm,trims[kind%5]);
+      // occasional AC compressor / planter under windows
+      if((r+c+kind)%7===0) addBox(wx,wy-.82,z-d/2-.20,.34,.16,.18,'metal',rot,false,T.metalDark);
     }
     for(let c=0;c<sideCols;c++){
-      const wz=z-d/2+0.9+(c*(d-1.8)/Math.max(1,sideCols-1));
-      const lit=((c*13+r*3+kind)%4)!==0;
-      addBox(x-w/2-0.035,wy,wz,.03,.62,Math.min(.82,(d/sideCols)*.28),lit?"glass":"dark",rot,false,lit?T.glass:T.windowDark);
-      addBox(x+w/2+0.035,wy,wz,.03,.62,Math.min(.82,(d/sideCols)*.28),lit?"glass":"dark",rot,false,lit?T.glass:T.windowDark);
+      const wz=z-d/2+1.15+(c*(d-2.3)/Math.max(1,sideCols-1));
+      const lit=((c*13+r*3+kind)%5)!==0;
+      addBox(x-w/2-.055,wy,wz,.055,.52,.62,lit?'glass_green':'dirty_window',rot,false,lit?T.glass:T.windowDark);
+      addBox(x+w/2+.055,wy,wz,.055,.52,.62,lit?'glass_green':'dirty_window',rot,false,lit?T.glass:T.windowDark);
     }
   }
-  // Ground-floor shopfronts, overhang and entrance.
-  addBox(x,1.25,z-d/2-.06,1.4,1.20,.08,"glass",rot,false,T.glassBlue);
-  addBox(x,2.85,z-d/2-.08,2.2,.16,.07,(kind%2)?"sign_blue":"sign_red",rot,false,(kind%2)?T.sign_blue:T.sign_red);
-  addBox(x,1.05,z-d/2-.09,.62,.94,.025,"dark",rot,false,T.black);
+  // Ground-floor storefront with projecting canopy and recessed entrance.
+  addBox(x,1.35,z-d/2-.10,w*.32,1.28,.07,'glass_blue',rot,false,T.glassBlue);
+  addBox(x,2.76,z-d/2-.17,w*.42,.16,.12,'awning',rot,false,T.sign_blue);
+  facadeDoor(x+w*.32,z-d/2-.13,rot);
+  addBox(x,3.02,z-d/2-.19,w*.43,.22,.08,(kind%2)?'sign_blue':'sign_red',rot,false,(kind%2)?T.sign_blue:T.sign_red);
 }
 
 function storefront(x,z,w,d,h,kind=0){
-  addBox(x,h/2,z,w/2,h/2,d/2,kind%2?"brick":"concrete",0,true,kind%2?T.brick:T.concreteWarm);
-  addBox(x,h+.06,z,w/2+.12,.08,d/2+.12,"roof",0,false,T.roof);
-  addBox(x,1.3,z-d/2-.08,w*.36,1.25,.05,"glass",0,false,T.glass);
-  addBox(x,2.65,z-d/2-.10,w*.42,.19,.07,kind%2?"sign_blue":"sign_red",0,false,kind%2?T.sign_blue:T.sign_red);
-  for(let k=0;k<3;k++) addBox(x-w/2+0.8+k*(w-1.6)/2,1.15,z-d/2-.11,.16,.88,.03,"dark",0,false,T.black);
+  addBox(x,h/2,z,w/2,h/2,d/2,kind%2?'brick_red':'stucco',0,true,kind%2?T.brick:T.concreteWarm);
+  addBox(x,h+.08,z,w/2+.15,.10,d/2+.15,'roof',0,false,T.roof);
+  addBox(x,1.45,z-d/2-.10,w*.38,1.35,.06,'glass_blue',0,false,T.glassBlue);
+  addBox(x,2.72,z-d/2-.16,w*.48,.18,.10,kind%2?'sign_blue':'sign_red',0,false,kind%2?T.sign_blue:T.sign_red);
+  facadeDoor(x-w*.28,z-d/2-.13,0);
+  for(let k=0;k<3;k++) addBox(x-w/2+1.0+k*(w-2)/2,1.25,z-d/2-.13,.055,1.1,.10,'facade_trim',0,false,T.concreteDark);
+  addBox(x,3.45,z-d/2-.14,w*.44,.08,.08,'awning',0,false,T.sign_blue);
 }
 
 // 16 blocks, varied building footprints. Roads remain clearly walkable between them.
@@ -305,6 +344,29 @@ for(const [x,z] of [[-10,-8],[10,-8],[-8,10],[8,-10]]){
   addBox(x,.22,z+.22,.08,.22,.08,"metal",0,false,T.metalDark);
 }
 for(const [x,z] of [[-5,-8.8],[5,-8.8],[-8.8,5],[8.8,-5]]) addBox(x,.52,z,.32,.52,.32,"metal",0,true,T.metalDark);
+
+// Street-level props: bins, signs, parking meters, vents and loading docks.
+function signPost(x,z,blue=true){
+  addCylinder(x,1.35,z,.045,2.7,'metal',8,T.metalDark);
+  addBox(x,2.65,z,.38,.32,.045,blue?'sign_blue':'sign_red',0,false,blue?T.sign_blue:T.sign_red);
+}
+function dumpster(x,z){
+  addBox(x,.58,z,.62,.58,.82,'corrugated',0,true,T.metalDark);
+  addBox(x,.88,z,.70,.06,.90,'metal',0,false,T.metal);
+}
+function parkingMeter(x,z){
+  addCylinder(x,.72,z,.035,1.44,'metal',8,T.metalDark);
+  addBox(x,1.45,z,.16,.13,.10,'metal',0,false,T.metal);
+}
+for(const [x,z] of [[-11,-25],[11,-25],[-25,11],[25,-11],[-47,-47],[47,47],[-47,47],[47,-47]]) dumpster(x,z);
+for(const [x,z] of [[-11,-18],[11,-18],[-18,11],[18,-11],[-65,18],[65,-18],[-18,65],[18,-65]]) parkingMeter(x,z);
+for(const [x,z] of [[-10,-54],[10,-54],[-54,10],[54,-10],[-82,36],[82,-36]]) signPost(x,z,(x+z)%2===0);
+
+// Brick/stone retaining strips, drainage grates and driveway cuts make the sidewalk read as a constructed street.
+for(const x of streets){
+  for(const z of [-45,-9,27,63]) addBox(x-ROAD_W/2-3.2,.205,z,.90,.025,.10,'metal',0,false,T.metalDark);
+  for(const z of [-72,-36,0,36,72]) addBox(x+ROAD_W/2+3.2,.205,z,.90,.025,.10,'metal',0,false,T.metalDark);
+}
 
 // Ground edge and modest skyline. Avoid the giant black wall effect from the previous build.
 addBox(0,-.40,-112,112,.40,.5,"dark",0,false,T.black);
@@ -440,12 +502,12 @@ function resize(){
   if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}
 }
 addEventListener("resize",resize);resize();
-gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.clearColor(.46,.53,.57,1);
+gl.enable(gl.DEPTH_TEST);gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.clearColor(.50,.58,.62,1);
 
 let last=performance.now(),frames=0,ft=last,fps=60;
 function render(){
   if(!ready) return;
-  const pv=mul(persp(Math.PI/3,canvas.width/canvas.height,.05,230),view());
+  const pv=mul(persp(Math.PI/2.85,canvas.width/canvas.height,.05,230),view());
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.useProgram(prog);gl.bindVertexArray(vao);
   gl.uniformMatrix4fv(vpLoc,false,pv);gl.uniform3f(sunLoc,-.42,.86,.30);gl.uniform3f(camLoc,player.x,player.y,player.z);
