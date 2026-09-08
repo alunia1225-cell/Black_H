@@ -95,136 +95,187 @@ function addCylinder(x,y,z,r,h,material,segments=10){
 function roadBox(){addBox(0,-.07,0,110,.07,110,"asphalt");}
 roadBox();
 
-// City streets: realistic hierarchy — arterial + perpendicular side streets.
-const sidewalkBlocks=[
- [-55,-55,41,41], [14,-55,41,41], [-55,14,41,41], [14,14,41,41]
-];
-for(const [x,z,w,d] of sidewalkBlocks){
- addBox(x,.02,z,w/2,.04,d/2,"sidewalk");
+// CITY DISTRICT ------------------------------------------------------------
+// A much larger continuous district: 7 x 7 street grid, varied blocks,
+// commercial frontage, residential streets, alleys, parking and skyline.
+// All geometry is procedural/local; no external assets or network calls.
+
+const DIST=308, ROAD=7.6, BLOCK=38.5, HALF=5;
+addBox(0,-.07,0,DIST/2,.07,DIST/2,"asphalt");
+
+// 7x7 street grid. Main streets are wider and sidewalks/curbs are built
+// around every carriageway rather than using a single giant flat plane.
+const roads=[];
+for(let i=-HALF;i<=HALF;i++){
+  const p=i*BLOCK;
+  roads.push(p);
+  addBox(p,.0,0,ROAD/2,.045,DIST/2,"asphalt");
+  addBox(0,.0,p,DIST/2,.045,ROAD/2,"asphalt");
+  // paired curbs
+  addBox(p-ROAD/2-.18,.12,0,.13,.12,DIST/2,"concrete");
+  addBox(p+ROAD/2+.18,.12,0,.13,.12,DIST/2,"concrete");
+  addBox(0,.12,p-ROAD/2-.18,DIST/2,.12,.13,"concrete");
+  addBox(0,.12,p+ROAD/2+.18,DIST/2,.12,.13,"concrete");
+  // dashed center lines
+  for(let q=-90;q<=90;q+=9){
+    addBox(p,.055,q,.055,.01,2.2,"lane");
+    addBox(q,.056,p,2.2,.01,.055,"lane");
+  }
 }
-// Roads wider than the small center prototype.
-for(let x=-55;x<=55;x+=2.75)addBox(x,.012,0,.018,.012,7.2,"lane");
-for(let z=-55;z<=55;z+=2.75)addBox(0,.013,z,7.2,.012,.018,"lane");
-// curb lines
-for(const [x,z,sx,sz] of [[0,-7.5,110,.16],[0,7.5,110,.16],[-7.5,0,.16,110],[7.5,0,.16,110]])
-  addBox(x,.14,z,sx,.14,sz,"concrete");
-// crosswalks
-for(let i=-5;i<=5;i++){addBox(i*1.0,.16,-5.9,.36,.012,1.2,"lane");addBox(i*1.0,.16,5.9,.36,.012,1.2,"lane");
- addBox(-5.9,.16,i*1.0,1.2,.012,.36,"lane");addBox(5.9,.16,i*1.0,1.2,.012,.36,"lane")}
+// Sidewalk slabs occupy each urban block. The center of each slab is later
+// filled with buildings, leaving realistic setbacks and service lanes.
+for(let bx=-HALF;bx<HALF;bx++)for(let bz=-HALF;bz<HALF;bz++){
+  const cx=(roads[bx+HALF]+roads[bx+HALF+1])/2;
+  const cz=(roads[bz+HALF]+roads[bz+HALF+1])/2;
+  addBox(cx,.035,cz,BLOCK/2-ROAD/2-.22,.035,BLOCK/2-ROAD/2-.22,"sidewalk");
+}
+
+// Crosswalks at the busiest intersections.
+for(const p of roads){
+  for(let k=-3;k<=3;k++){
+    addBox(p+k*.95,.11,-ROAD/2-.7,.34,.015,1.7,"lane");
+    addBox(p+k*.95,.11, ROAD/2+.7,.34,.015,1.7,"lane");
+    addBox(-ROAD/2-.7,.11,p+k*.95,1.7,.015,.34,"lane");
+    addBox( ROAD/2+.7,.11,p+k*.95,1.7,.015,.34,"lane");
+  }
+}
 
 // Building generator.
 const buildingMats=["concrete","brick","glass"];
-const facadeTints=["#8d8a83","#6e7272","#565c60","#918477","#64676b","#7a7269"];
-let seed=92317,R=rand(seed);
+let seed=92317;
+const R=rand(seed);
 function building(x,z,w,d,h,style){
- const mat=buildingMats[style%buildingMats.length];
- addBox(x,h/2,z,w/2,h/2,d/2,mat,0,true);
- // floor bands and roof mechanical parapet
- for(let y=3.2;y<h-.8;y+=3.2)addBox(x,y,z,w/2+.02,.055,d/2+.02,"dark");
- addBox(x,h+.08,z,w/2+.12,.09,d/2+.12,"roof");
- // windows every facade module
- const cols=Math.max(2,Math.floor(w/2.6)), rows=Math.max(2,Math.floor((h-2)/3.0));
- for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
-   const wx=x-w/2+(c+.5)*w/cols, wy=2+r*3;
-   if(wy>h-.8)continue;
-   const ww=Math.min(1.05,w/cols*.55);
-   const on=((c*17+r*13+style*7)%7)<2;
-   addBox(wx,wy,z-d/2-.035,ww,.7,.025,on?"window":"dark",0,false);
-   addBox(wx,wy,z+d/2+.035,ww,.7,.025,on?"window":"dark",0,false);
- }
- const sideRows=Math.max(2,Math.floor((h-2)/3.0)), sideCols=Math.max(2,Math.floor(d/3.2));
- for(let r=0;r<sideRows;r++)for(let c=0;c<sideCols;c++){
-  const wz=z-d/2+(c+.5)*d/sideCols,wy=2+r*3;
-  if(wy>h-.8)continue;
-  addBox(x-w/2-.035,wy,wz,.025,.7,Math.min(1.05,d/sideCols*.55),"glass");
-  addBox(x+w/2+.035,wy,wz,.025,.7,Math.min(1.05,d/sideCols*.55),"glass");
- }
- // entrance + storefront
- addBox(x,1.15,z-d/2-.055,1.35,1.15,.08,"dark");
- addBox(x,1.15,z-d/2-.09,.82,.93,.025,"glass");
- if(style%3===0){addBox(x,3.3,z-d/2-.09,2.3,.18,.08,"sign_red");}
- if(style%4===0){addBox(x+.9,h+.55,z,.55,.48,.55,"metal");addBox(x-.9,h+.35,z+.8,.4,.28,.4,"metal");}
+  const mat=buildingMats[style%buildingMats.length];
+  addBox(x,h/2,z,w/2,h/2,d/2,mat,0,true);
+  // Floor plates / parapets give silhouettes more structure than boxes.
+  for(let y=3.1;y<h-.65;y+=3.1)addBox(x,y,z,w/2+.025,.045,d/2+.025,"dark");
+  addBox(x,h+.08,z,w/2+.12,.08,d/2+.12,"roof");
+
+  const cols=Math.max(2,Math.floor(w/2.45));
+  const rows=Math.max(2,Math.floor((h-2)/2.9));
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const wx=x-w/2+(c+.5)*w/cols, wy=2+r*2.9;
+    if(wy>h-.7)continue;
+    const ww=Math.min(1.05,w/cols*.54);
+    const on=((c*17+r*13+style*7)%9)<6;
+    addBox(wx,wy,z-d/2-.035,ww,.68,.025,on?"window":"dark");
+    addBox(wx,wy,z+d/2+.035,ww,.68,.025,on?"window":"dark");
+  }
+  const sc=Math.max(2,Math.floor(d/3.0));
+  for(let r=0;r<rows;r++)for(let c=0;c<sc;c++){
+    const wz=z-d/2+(c+.5)*d/sc,wy=2+r*2.9;
+    if(wy>h-.7)continue;
+    addBox(x-w/2-.035,wy,wz,.025,.68,Math.min(1.0,d/sc*.45),"glass");
+    addBox(x+w/2+.035,wy,wz,.025,.68,Math.min(1.0,d/sc*.45),"glass");
+  }
+  // Ground-floor entrance / storefront.
+  addBox(x,1.15,z-d/2-.055,1.35,1.15,.08,"dark");
+  addBox(x,1.15,z-d/2-.09,.82,.93,.025,"glass");
+  if(style%3===0)addBox(x,3.25,z-d/2-.09,2.3,.18,.08,"sign_red");
+  if(style%5===0)addBox(x-.8,h+.48,z,.5,.42,.5,"metal");
 }
 
-const spots=[
- [-43,-42,13,18,14,1],[-26,-45,11,15,21,2],[-45,-23,17,11,11,3],[-30,-26,11,10,27,4],[-18,-40,7,8,9,5],
- [29,-46,14,16,17,6],[46,-29,11,15,12,7],[19,-33,10,12,28,8],[34,-13,16,10,15,9],[48,-4,8,10,23,10],
- [-45,30,14,17,13,11],[-27,27,11,15,19,12],[-42,47,9,10,24,13],[-18,45,15,11,12,14],
- [29,27,16,16,13,15],[45,30,10,16,21,16],[28,46,16,11,16,17],[46,47,9,10,30,18],
- [-48,8,8,9,10,19],[49,9,8,12,14,20]
-];
-for(const b of spots)building(...b);
-
-// Low-rise commercial strips facing the central roads.
-for(const x of [-44,-34,-24,24,34,44]){
- building(x,-18,8,5,7,Math.abs(x)%5);
- building(x,18,8,5,7,(Math.abs(x)+2)%5);
+// Populate every block with irregular footprints. Some blocks are low-rise
+// commercial, others contain a taller anchor building.
+for(let bx=-HALF;bx<HALF;bx++)for(let bz=-HALF;bz<HALF;bz++){
+  const x0=roads[bx+HALF],x1=roads[bx+HALF+1];
+  const z0=roads[bz+HALF],z1=roads[bz+HALF+1];
+  const cx=(x0+x1)/2,cz=(z0+z1)/2;
+  const local=rand((bx+12)*9283+(bz+17)*17389+seed);
+  const central=Math.abs(cx)<80&&Math.abs(cz)<80;
+  const commercial=(Math.abs(cx)<45||Math.abs(cz)<45);
+  const count=central?3:2;
+  for(let n=0;n<count;n++){
+    const w=9+local()*9,d=9+local()*9;
+    const px=cx+(local()-.5)*14, pz=cz+(local()-.5)*14;
+    const h=(central?13:9)+local()*(commercial?18:12);
+    building(px,pz,w,d,h,Math.floor(local()*20));
+  }
+  // Low-rise shop row on major-road facing blocks.
+  if(commercial){
+    const face=local()>.5;
+    const yy=face?z0+4.4:z1-4.4;
+    for(let n=-1;n<=1;n++){
+      const px=cx+n*8.5;
+      building(px,yy,7.2,5.0,5.5+local()*3.5,Math.floor(local()*20));
+    }
+  }
 }
-for(const z of [-44,-34,-24,24,34,44]){
- building(-18,z,5,8,7,(Math.abs(z)+1)%5);
- building(18,z,5,8,7,(Math.abs(z)+3)%5);
+
+// Alleys / service strips between selected buildings.
+for(let i=-3;i<=3;i++)for(let j=-3;j<=3;j++){
+  if((i+j)%2===0){
+    const x=i*BLOCK+BLOCK/2,z=j*BLOCK+BLOCK/2;
+    addBox(x,.045,z,1.15,.045,15.5,"asphalt");
+  }
 }
 
-// Street lamps: poles + horizontal arms + glowing lamp blocks.
+// Street lamps throughout the district.
 function streetLamp(x,z,flip=1){
- addCylinder(x,2.7,z,.075,5.4,"metal",8);
- addBox(x+.55*flip,5.25,z,.65,.055,.055,"metal");
- addBox(x+1.12*flip,5.05,z,.16,.10,.10,"light");
+  addCylinder(x,2.7,z,.075,5.4,"metal",8);
+  addBox(x+.55*flip,5.25,z,.65,.055,.055,"metal");
+  addBox(x+1.12*flip,5.05,z,.16,.10,.10,"light");
 }
-for(const [x,z,f] of [[-9,-9,1],[9,-9,-1],[-9,9,1],[9,9,-1],[0,-11,1],[0,11,-1],[-11,0,1],[11,0,-1],
-[-32,-7,1],[32,-7,-1],[-32,7,1],[32,7,-1],[-7,-32,1],[7,-32,-1],[-7,32,1],[7,32,-1]])streetLamp(x,z,f);
+for(const p of roads){
+  streetLamp(p-5.3,-5.3,1);streetLamp(p+5.3,5.3,-1);
+  streetLamp(-5.3,p,-1);streetLamp(5.3,p,1);
+}
 
-// Utility poles + simplified overhead wires.
+// Utility poles on selected residential edges.
 function pole(x,z){
- addCylinder(x,4,z,.11,8,"wood",8);
- addBox(x,8.05,z,.95,.09,.09,"wood");
- for(let i=-2;i<=2;i++)addCylinder(x+i*.46,8.18,z,.028,.12,"metal",6);
+  addCylinder(x,4,z,.11,8,"wood",8);
+  addBox(x,8.05,z,.95,.09,.09,"wood");
+  for(let i=-2;i<=2;i++)addCylinder(x+i*.46,8.18,z,.028,.12,"metal",6);
 }
 function wire(x1,z1,x2,z2,y){
- const dx=x2-x1,dz=z2-z1,len=Math.hypot(dx,dz),ang=Math.atan2(dz,dx);
- addBox((x1+x2)/2,y,(z1+z2)/2,len/2,.025,.025,"dark",ang);
+  const dx=x2-x1,dz=z2-z1,len=Math.hypot(dx,dz),ang=Math.atan2(dz,dx);
+  addBox((x1+x2)/2,y,(z1+z2)/2,len/2,.025,.025,"dark",ang);
 }
-for(const [x,z] of [[-11,-24],[11,-24],[-24,-11],[-24,11],[11,24],[-11,24],[24,-11],[24,11]])pole(x,z);
-wire(-11,-24,11,-24,8.2);wire(-24,-11,-24,11,8.2);wire(11,24,-11,24,8.2);wire(24,-11,24,11,8.2);
+for(const p of roads){
+  if(Math.abs(p)>70){
+    pole(p-4,-HALF*BLOCK+5); pole(p+4,HALF*BLOCK-5);
+    wire(p-4,-HALF*BLOCK+5,p+4,-HALF*BLOCK+5,8.2);
+  }
+}
 
-// Parked cars with roof/glass and wheels represented by dark blocks.
+// Parking lots and parked cars.
 function car(x,z,yaw,body){
- addBox(x,.55,z,1.0,.5,2.15,body,yaw,true);
- addBox(x,1.0,z,0.76,.32,1.25,"glass",yaw);
- addBox(x,.3,z-1.65,.34,.22,.25,"dark",yaw);
- addBox(x,.3,z+1.65,.34,.22,.25,"dark",yaw);
+  addBox(x,.55,z,1.0,.5,2.15,body,yaw,true);
+  addBox(x,1.0,z,.76,.32,1.25,"glass",yaw);
+  addBox(x,.3,z-1.65,.34,.22,.25,"dark",yaw);
+  addBox(x,.3,z+1.65,.34,.22,.25,"dark",yaw);
 }
-car(-10,-10,0,"#4c5254");car(10,-10,0,"#6f6459");car(-10,10,0,"#3d4548");car(10,10,0,"#747777");
-car(-10,19,Math.PI/2,"#50555a");car(10,-19,Math.PI/2,"#6a514b");
-car(-19,-10,Math.PI/2,"#555b59");car(19,10,Math.PI/2,"#4e5257");
+const carColors=["#4c5254","#6f6459","#3d4548","#747777","#50555a","#6a514b"];
+for(let i=-3;i<=3;i++){
+  const x=i*BLOCK+BLOCK/2;
+  car(x,-7.0,0,carColors[(i+4)%carColors.length]);
+  car(x,7.0,Math.PI,carColors[(i+6)%carColors.length]);
+}
+for(let i=-3;i<=3;i++){
+  const z=i*BLOCK+BLOCK/2;
+  car(-7.0,z,Math.PI/2,carColors[(i+3)%carColors.length]);
+  car(7.0,z,-Math.PI/2,carColors[(i+5)%carColors.length]);
+}
 
-// Trees, planters and street bins.
+// Trees, planters, benches and bins.
 function tree(x,z,scale=1){
- addCylinder(x,1.0*scale,z,.16*scale,2.0*scale,"wood",8);
- addBox(x,2.4*scale,z,.8*scale,1.1*scale,.8*scale,"leaf");
- addBox(x+.35*scale,3.0*scale,z-.15*scale,.55*scale,.55*scale,.55*scale,"leaf");
+  addCylinder(x,1.0*scale,z,.16*scale,2*scale,"wood",8);
+  addBox(x,2.4*scale,z,.8*scale,1.1*scale,.8*scale,"leaf");
+  addBox(x+.35*scale,3.0*scale,z-.15*scale,.55*scale,.55*scale,.55*scale,"leaf");
 }
-for(const p of [[-13,-14,1],[13,-14,.9],[-13,14,1.1],[13,14,.9],[-21,-7,.8],[21,7,.8]])tree(...p);
-for(const [x,z] of [[-5,-8],[5,-8],[-8,-5],[8,5]])addBox(x,.45,z,.35,.45,.35,"metal");
+for(const p of [[-5,-5],[5,-5],[-5,5],[5,5],[-44,-44],[44,-44],[-44,44],[44,44],
+                [-82,-82],[82,-82],[-82,82],[82,82]])tree(p[0],p[1],.9);
+for(const [x,z] of [[-5,-8],[5,-8],[-8,5],[8,-5]])addBox(x,.45,z,.35,.45,.35,"metal");
 
-// Benches / bins / hydrants around sidewalks.
-for(const [x,z] of [[-6,-8.2],[6,-8.2],[-8.2,6],[8.2,-6]]){
- addBox(x,.42,z,1.0,.08,.28,"wood");
- addBox(x,.2,z-.22,.08,.2,.08,"metal");addBox(x,.2,z+.22,.08,.2,.08,"metal");
-}
-for(const [x,z] of [[-5,-8.8],[5,-8.8],[-8.8,5],[8.8,-5]])addBox(x,.5,z,.28,.5,.28,"metal");
-
-// Distant skyline — enough mass to prevent an empty horizon.
+// Distant skyline beyond the playable district.
 const skylineR=rand(4401);
-for(let x=-105;x<=105;x+=7)for(let z=-105;z<=105;z+=9){
- if(Math.abs(x)<65&&Math.abs(z)<65)continue;
- const h=10+Math.floor(skylineR()*25),w=3+skylineR()*3,d=3+skylineR()*3;
- addBox(x,h/2,z,w/2,h/2,d/2,(skylineR()>.5)?"concrete":"brick");
+for(let x=-130;x<=130;x+=8)for(let z=-130;z<=130;z+=10){
+  if(Math.abs(x)<104&&Math.abs(z)<104)continue;
+  const h=12+Math.floor(skylineR()*38),w=3+skylineR()*4,d=3+skylineR()*4;
+  addBox(x,h/2,z,w/2,h/2,d/2,(skylineR()>.5)?"concrete":"brick");
 }
-
-// Ground edge / horizon blockers.
-addBox(0,-.4,-112,112,.4,.5,"dark");addBox(0,-.4,112,112,.4,.5,"dark");
-addBox(-112,-.4,0,.5,.4,112,"dark");addBox(112,-.4,0,.5,.4,112,"dark");
+addBox(0,-.4,-145,145,.4,.5,"dark");addBox(0,-.4,145,145,.4,.5,"dark");
+addBox(-145,-.4,0,.5,.4,145,"dark");addBox(145,-.4,0,.5,.4,145,"dark");
 
 // Pack geometry into one static draw call.
 const stride=3+3+2+4, count=P.length/3;
@@ -293,7 +344,7 @@ function blocked(nx,nz){
  for(const c of colliders){
    if(Math.abs(nx-c.x)<c.sx+r && Math.abs(nz-c.z)<c.sz+r)return true;
  }
- return Math.abs(nx)>106||Math.abs(nz)>106;
+ return Math.abs(nx)>142||Math.abs(nz)>142;
 }
 function update(dt){
  let f=(keys.KeyW?1:0)-(keys.KeyS?1:0),s=(keys.KeyD?1:0)-(keys.KeyA?1:0);
