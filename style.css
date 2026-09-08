@@ -1,1 +1,16 @@
-*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#111;color:#eee;font-family:Arial,sans-serif;touch-action:none}canvas{display:block}#hud{position:fixed;inset:12px 14px auto;z-index:5;display:flex;gap:22px;font-size:12px;text-shadow:0 2px 5px #000;pointer-events:none}#hud span:first-of-type{margin-left:auto}#cross{position:fixed;z-index:6;left:50%;top:50%;transform:translate(-50%,-50%);font-size:18px;pointer-events:none}#look{position:fixed;right:0;top:0;width:62%;height:100%;z-index:10}#joy{position:fixed;left:24px;bottom:28px;width:132px;height:132px;border:2px solid #fff2;border-radius:50%;z-index:20;background:#0002}#stick{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px;border-radius:50%;background:#fff3}#buttons{position:fixed;right:22px;bottom:25px;z-index:21;display:grid;grid-template-columns:88px 88px;gap:8px}button{height:50px;background:#050606b8;color:#fff;border:1px solid #fff3;border-radius:8px;font-weight:bold}#rotate{display:none;position:fixed;inset:0;background:#101212;z-index:99;align-items:center;justify-content:center;font-weight:bold}@media(orientation:portrait){#rotate{display:flex}}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101212;color:#eee;font-family:Arial,sans-serif;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+#boot{position:fixed;left:14px;bottom:14px;z-index:90;display:flex;flex-direction:column;gap:4px;padding:9px 11px;background:#050606b8;border:1px solid #fff2;border-radius:7px;font:12px monospace;pointer-events:none}
+#boot strong{letter-spacing:.12em}
+#bootStatus{opacity:.72}
+#hud{position:fixed;inset:12px 14px auto;z-index:20;display:flex;gap:22px;font-size:12px;text-shadow:0 2px 5px #000;pointer-events:none}
+#hud span:first-of-type{margin-left:auto}
+#cross{position:fixed;z-index:21;left:50%;top:50%;transform:translate(-50%,-50%);font-size:18px;pointer-events:none}
+#look{position:fixed;right:0;top:0;width:62%;height:100%;z-index:10}
+#joy{position:fixed;left:24px;bottom:28px;width:132px;height:132px;border:2px solid #fff2;border-radius:50%;z-index:30;background:#0002}
+#stick{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px;border-radius:50%;background:#fff3}
+#buttons{position:fixed;right:22px;bottom:25px;z-index:31;display:grid;grid-template-columns:88px 88px;gap:8px}
+button{height:50px;background:#050606b8;color:#fff;border:1px solid #fff3;border-radius:8px;font-weight:bold}
+#rotate{display:none;position:fixed;inset:0;background:#101212;z-index:99;align-items:center;justify-content:center;font-weight:bold}
+@media(orientation:portrait){#rotate{display:flex}}
