@@ -21,9 +21,49 @@ const fill=new THREE.DirectionalLight(0xb8d2ff,.9);fill.position.set(120,70,-120
 const C={road:0x252826,sidewalk:0x918d83,curb:0x5c5b55,concrete:0x858077,brick:0x765044,redbrick:0x6b4036,siding:0x777b77,wood:0x665242,stucco:0x9b988e,roof:0x242623,dark:0x181a19,glass:0x527079,metal:0x666964,rust:0x70473b,sign:0xb7a25f,green:0x53614e,trim:0x30322f,door:0x34322e,white:0xd7d3c8,yellow:0xd0ad4b};
 const M={};for(const[k,v]of Object.entries(C))M[k]=new THREE.MeshStandardMaterial({color:v,roughness:k==='glass'||k==='glass2'?.24:.78,metalness:k==='metal'?.52:0});M.glass.transparent=true;M.glass.opacity=.72;M.glass2=new THREE.MeshStandardMaterial({color:0x26393c,roughness:.2,metalness:.05});M.glass2.transparent=true;M.glass2.opacity=.9;
 const texLoader=new THREE.TextureLoader();
-for(const key of ['siding','brick','asphalt','concrete','rust']){const b=texLoader.load(`pbr_${key}_basecolor.jpg`),r=texLoader.load(`pbr_${key}_roughness.jpg`),n=texLoader.load(`pbr_${key}_normal.jpg`),a=texLoader.load(`pbr_${key}_ao.jpg`);for(const t of[b,r,n,a]){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(key==='asphalt'?7:4,key==='asphalt'?7:4);}M[key].map=b;M[key].roughnessMap=r;M[key].normalMap=n;M[key].aoMap=a;M[key].normalScale.set(.48,.48);M[key].needsUpdate=true;}
-const decalTex={rain:texLoader.load('decal_rain_streaks.png'),grime:texLoader.load('decal_foundation_grime.png'),oil:texLoader.load('decal_oil_stain.png')};for(const t of Object.values(decalTex)){t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;}
-const decalMat={rain:new THREE.MeshBasicMaterial({map:decalTex.rain,transparent:true,depthWrite:false,opacity:.55}),grime:new THREE.MeshBasicMaterial({map:decalTex.grime,transparent:true,depthWrite:false,opacity:.65}),oil:new THREE.MeshBasicMaterial({map:decalTex.oil,transparent:true,depthWrite:false,opacity:.5})};
+function safePBR(key){
+  const mat=M[key];
+  if(!mat) return;
+  const rep=key==='asphalt'?7:4;
+  const load=(file,done)=>{
+    try{
+      return texLoader.load(file,done,undefined,()=>{});
+    }catch(_){return null;}
+  };
+  const b=load(`pbr_${key}_basecolor.jpg`);
+  const r=load(`pbr_${key}_roughness.jpg`);
+  const n=load(`pbr_${key}_normal.jpg`);
+  const a=load(`pbr_${key}_ao.jpg`);
+  for(const t of [b,r,n,a]){
+    if(!t) continue;
+    t.wrapS=t.wrapT=THREE.RepeatWrapping;
+    t.repeat.set(rep,rep);
+  }
+  if(b) mat.map=b;
+  if(r) mat.roughnessMap=r;
+  if(n){mat.normalMap=n; if(mat.normalScale) mat.normalScale.set(.48,.48);}
+  if(a) mat.aoMap=a;
+  mat.needsUpdate=true;
+}
+for(const key of ['siding','brick','asphalt','concrete','rust']) safePBR(key);
+function loadOptionalTexture(file){
+  try{return texLoader.load(file,undefined,undefined,()=>{});}catch(_){return null;}
+}
+const decalTex={
+  rain:loadOptionalTexture('decal_rain_streaks.png'),
+  grime:loadOptionalTexture('decal_foundation_grime.png'),
+  oil:loadOptionalTexture('decal_oil_stain.png')
+};
+for(const t of Object.values(decalTex)){
+  if(!t) continue;
+  t.colorSpace=THREE.SRGBColorSpace;
+  t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
+}
+const decalMat={
+  rain:new THREE.MeshBasicMaterial({map:decalTex.rain||null,transparent:true,depthWrite:false,opacity:.55}),
+  grime:new THREE.MeshBasicMaterial({map:decalTex.grime||null,transparent:true,depthWrite:false,opacity:.65}),
+  oil:new THREE.MeshBasicMaterial({map:decalTex.oil||null,transparent:true,depthWrite:false,opacity:.5})
+};
 
 // High-density procedural architecture: BufferGeometry only. No BoxGeometry for buildings.
 function meshFromData(name,verts,normals,uvs,indices,mat,parent=city){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));if(normals?.length)g.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));else g.computeVertexNormals();if(uvs?.length){g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setAttribute('uv2',new THREE.Float32BufferAttribute(uvs,2));}g.setIndex(indices);g.computeBoundingSphere();const m=new THREE.Mesh(g,M[mat]||mat);m.name=name;m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
